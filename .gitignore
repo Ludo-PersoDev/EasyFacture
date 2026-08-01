@@ -1,5 +1,5 @@
 # Dossiers générés par l'application
-exports/
+export/
 backups/
 
 # Dossiers générés par PyInstaller
