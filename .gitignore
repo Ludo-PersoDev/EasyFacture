@@ -1,0 +1,19 @@
+# Dossiers générés par l'application
+exports/
+backups/
+
+# Dossiers générés par PyInstaller
+build/
+dist/
+*.spec.bak
+
+# Base de données SQLite locale (optionnel, selon si tu veux garder une DB vide)
+FactureX.db
+
+# Fichiers temporaires Python et VS Code / PyCharm
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.venv/
+env/
