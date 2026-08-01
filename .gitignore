@@ -1,6 +1,7 @@
 # Dossiers générés par l'application
 export/
 backups/
+assets/logo.png
 
 # Dossiers générés par PyInstaller
 build/
