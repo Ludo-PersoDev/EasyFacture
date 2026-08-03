@@ -26,7 +26,7 @@ def trouver_chemin_pdf(nom_client, num_facture):
     return None
 
   dossier_client_factures = os.path.join(
-      'exports', str(nom_client).strip(), 'factures'
+      'export', str(nom_client).strip(), 'factures'
   )
 
   chemin_1 = os.path.join(dossier_client_factures, f'facture_{num_facture}.pdf')

@@ -1,7 +1,16 @@
+#Archivage Pré-GitHub
+Archivage/
+
 # Dossiers générés par l'application
 export/
-backups/
+auto_backups/
+
+# Fichiers de tests
 assets/logo.png
+
+# JSON pour sécu
+credentials.json
+token.json
 
 # Dossiers générés par PyInstaller
 build/
