@@ -27,7 +27,6 @@ def render_factures():
         "w-full p-6 bg-white border border-slate-200 rounded-xl space-y-4"
     ):
 
-        # BARRE SUPÉRIEURE (FILTRES ET CRÉATION)
         top_bar = ui.row().classes(
             "w-full justify-between items-center mb-2 gap-4 flex-wrap"
         )
@@ -84,7 +83,6 @@ def render_factures():
                 item["total_ht_txt"] = f"{item['total_ht'] or 0.0:.2f} € HT"
                 item["total_ttc_txt"] = f"{item['total_ttc'] or 0.0:.2f} € TTC"
 
-                # Calcul dynamique de l'état visuel de l'échéance (Vert, Jaune, Rouge)
                 etat_echeance = "vert"
                 if item["statut"] not in ["Payée", "Annulée"] and item.get("date_echeance"):
                     try:
@@ -101,14 +99,12 @@ def render_factures():
                         pass
                 item["etat_echeance"] = etat_echeance
 
-                # Statut d'envoi du mail avec icônes visuelles intégrées
                 if item.get("date_envoi_mail"):
                     date_env = formater_date_fr(item["date_envoi_mail"])
                     item["mail_status_txt"] = f"✅ Envoyé le {date_env}"
                 else:
                     item["mail_status_txt"] = "❌ Non envoyé"
 
-                # Gestion du libellé d'affichage du statut (ex: Payée le JJ/MM/AAAA)
                 date_paiement_fr = formater_date_fr(item.get("date_paiement"))
                 mode_regl = item.get("mode_reglement")
 
@@ -120,7 +116,6 @@ def render_factures():
                 else:
                     item["statut_affichage"] = item.get("statut", "")
 
-                # Filtres
                 if filtre_statut != "Tous" and item["statut"] != filtre_statut:
                     continue
                 if (
@@ -206,7 +201,7 @@ def render_factures():
                     "align": "center",
                     "sortable": True,
                     "minWidth": 200,
-                    "flex": 1,  # Prends tout l'espace disponible restant
+                    "flex": 1,
                     "cellClassRules": {
                         "bg-slate-100 text-slate-800 font-semibold text-xs border-slate-300": (
                             'x && x.startsWith("Brouillon")'
@@ -249,7 +244,6 @@ def render_factures():
 
                 grid.on("cellClicked", on_cell_clicked)
 
-            # BARRE D'ACTIONS CONTEXTUELLE
             with actions_bar_container:
                 btn_group = ui.row().classes("items-center gap-3 flex-wrap")
 
@@ -310,21 +304,17 @@ def render_factures():
                                 ).props(
                                     "dense flat color=warning font-bold"
                                 ).tooltip(
-                                    "Annule la facture en émettant un avoir"
-                                    " légal"
+                                    "Annule la facture en émettant un avoir légal"
                                 )
                         else:
                             ui.label(
-                                "💡 Cliquez sur une facture pour l'imprimer,"
-                                " voir son récapitulatif, l'envoyer ou"
-                                " enregistrer son paiement."
+                                "💡 Cliquez sur une facture pour l'imprimer, voir son récapitulatif, l'envoyer ou enregistrer son paiement."
                             ).classes(
                                 "text-xs text-slate-400 font-medium italic py-1"
                             )
 
                 update_action_bar()
 
-        # FILTRES DE RECHERCHE
         with top_bar:
             with ui.row().classes("items-center gap-4 flex-wrap flex-1"):
                 ui.label("Factures").classes(
@@ -362,20 +352,17 @@ def render_factures():
                 on_click=lambda: ouvrir_dialog_creation_facture(),
             ).props("color=primary font-bold")
 
-        # MODALE : RÉCAPITULATIF DÉTAILLÉ DES PRESTATIONS
         def ouvrir_dialog_recap(facture):
             with ui.dialog() as dialog, ui.card().classes(
                 "w-full max-w-5xl p-6 space-y-4 bg-white"
             ):
                 ui.label(
-                    f"Récapitulatif des Prestations - Facture"
-                    f" {facture['numero_facture']}"
+                    f"Récapitulatif des Prestations - Facture {facture['numero_facture']}"
                 ).classes(
                     "text-xl font-bold text-slate-800 border-b pb-2 w-full"
                 )
                 ui.label(
-                    f"Client : {facture.get('client_nom', '')} | Période de"
-                    " référence du mois"
+                    f"Client : {facture.get('client_nom', '')} | Période de référence du mois"
                 ).classes("text-sm text-slate-600 font-medium")
 
                 conn = database.get_conn()
@@ -414,8 +401,7 @@ def render_factures():
                         debut_sem = dt - timedelta(days=dt.weekday())
                         fin_sem = debut_sem + timedelta(days=6)
                         sem_key = (
-                            f"Semaine du {debut_sem.strftime('%d %B').lower()}"
-                            f" au {fin_sem.strftime('%d %B').lower()}"
+                            f"Semaine du {debut_sem.strftime('%d %B').lower()} au {fin_sem.strftime('%d %B').lower()}"
                         )
 
                         if sem_key not in semaines_dict:
@@ -497,8 +483,7 @@ def render_factures():
                         )
                         for etab in etabs_list:
                             table_html.append(
-                                "<td class='border border-slate-300 p-3"
-                                " text-center'>-</td>"
+                                "<td class='border border-slate-300 p-3 text-center'>-</td>"
                             )
                         table_html.append(
                             f"<td class='border border-slate-300 p-3 text-center'>{total_general_mois:.0f}€</td>"
@@ -520,7 +505,6 @@ def render_factures():
 
             dialog.open()
 
-        # MODALE : CRÉATION DE FACTURE
         def ouvrir_dialog_creation_facture():
             clients = database.recuperer_tous_les_clients()
             if not clients:
@@ -544,8 +528,7 @@ def render_factures():
                 ui.label(
                     "Sélection rapide des prestations à facturer :"
                 ).classes(
-                    "text-xs font-semibold text-slate-500 uppercase"
-                    " tracking-wider mb-1"
+                    "text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"
                 )
                 with ui.row().classes("w-full gap-2 items-center flex-wrap mb-2"):
                     btn_m_prec = ui.button(
@@ -562,12 +545,10 @@ def render_factures():
                     ).props("dense flat color=slate text-xs")
 
                 prestations_container = ui.column().classes(
-                    "w-full max-h-60 overflow-y-auto border p-3 rounded-lg"
-                    " bg-slate-50 space-y-2"
+                    "w-full max-h-60 overflow-y-auto border p-3 rounded-lg bg-slate-50 space-y-2"
                 )
                 totaux_container = ui.row().classes(
-                    "w-full justify-between items-center bg-slate-100 p-3"
-                    " rounded-lg font-semibold text-slate-800"
+                    "w-full justify-between items-center bg-slate-100 p-3 rounded-lg font-semibold text-slate-800"
                 )
 
                 cochables_holder = {}
@@ -590,8 +571,7 @@ def render_factures():
                     if not items:
                         with prestations_container:
                             ui.label(
-                                "Aucune prestation en attente de facturation"
-                                " pour ce client."
+                                "Aucune prestation en attente de facturation pour ce client."
                             ).classes("text-sm text-slate-500 italic py-2")
                         maj_totaux()
                         return
@@ -730,8 +710,7 @@ def render_factures():
                         days=jours
                     )
                     echeance_label.set_text(
-                        f"Échéance calculée au :"
-                        f" {dt_echeance_obj.strftime('%d/%m/%Y')}"
+                        f"Échéance calculée au : {dt_echeance_obj.strftime('%d/%m/%Y')}"
                     )
                     return dt_echeance_obj.strftime("%Y-%m-%d")
 
@@ -748,8 +727,7 @@ def render_factures():
 
                     if not interv_ids_soisis:
                         ui.notify(
-                            "Veuillez cocher au moins une prestation à"
-                            " facturer.",
+                            "Veuillez cocher au moins une prestation à facturer.",
                             type="warning",
                         )
                         return
@@ -797,13 +775,11 @@ def render_factures():
 
                     for item_id in interv_ids_soisis:
                         cur.execute(
-                            "UPDATE interventions SET facture_id = ?, statut ="
-                            " 'Facturé' WHERE id = ?",
+                            "UPDATE interventions SET facture_id = ?, statut = 'Facturé' WHERE id = ?",
                             (facture_id, item_id),
                         )
                         cur.execute(
-                            "INSERT INTO facture_items (facture_id,"
-                            " intervention_id) VALUES (?, ?)",
+                            "INSERT INTO facture_items (facture_id, intervention_id) VALUES (?, ?)",
                             (facture_id, item_id),
                         )
 
@@ -813,15 +789,13 @@ def render_factures():
                     ).fetchone()
                     if client_info and client_info["recap_interventions"] == 1:
                         conn.execute(
-                            "UPDATE factures SET recap_genere = 1 WHERE id ="
-                            " ?",
+                            "UPDATE factures SET recap_genere = 1 WHERE id = ?",
                             (facture_id,),
                         )
 
                     conn.commit()
                     conn.close()
 
-                    # Génération automatique du PDF facture + PDF récap dans C:\FacturEx\Export\NomClient\Recaps si option active
                     try:
                         pdf_factures.generer_pdf_facture(facture_id)
                         if client_info and client_info["recap_interventions"] == 1:
@@ -854,7 +828,6 @@ def render_factures():
 
             dialog.open()
 
-        # MODALE : SELECTION DE LA DATE ET DU MODE DE PAIEMENT
         def ouvrir_dialog_paiement(facture):
             with ui.dialog() as dialog, ui.card().classes("w-full max-w-md p-6 space-y-4"):
                 ui.label(f"Enregistrer le paiement - Facture {facture['numero_facture']}").classes("text-xl font-bold text-slate-800")
@@ -902,7 +875,6 @@ def render_factures():
 
             dialog.open()
 
-        # ANNULATION PAR ÉMISSION D'AVOIR
         def confirmer_avoir_facture(facture):
             with ui.dialog() as dialog, ui.card().classes(
                 "p-6 space-y-4 max-w-md"
@@ -911,20 +883,16 @@ def render_factures():
                     "text-lg font-bold text-slate-800 border-b pb-2 w-full"
                 )
                 ui.label(
-                    f"Voulez-vous annuler la facture"
-                    f" « {facture['numero_facture']} » ?"
+                    f"Voulez-vous annuler la facture « {facture['numero_facture']} » ?"
                 ).classes("text-slate-700 font-semibold text-sm")
                 ui.label(
-                    "Les prestations liées redeviendront disponibles pour une"
-                    " facturation ultérieure et la facture sera classée"
-                    " 'Annulée'."
+                    "Les prestations liées redeviendront disponibles pour une facturation ultérieure et la facture sera classée 'Annulée'."
                 ).classes("text-slate-500 text-xs italic")
 
                 def annuler_et_creer_avoir():
                     conn = database.get_conn()
                     conn.execute(
-                        "UPDATE interventions SET facture_id = NULL, statut ="
-                        " 'Réalisée' WHERE facture_id = ?",
+                        "UPDATE interventions SET facture_id = NULL, statut = 'Réalisée' WHERE facture_id = ?",
                         (facture["id"],),
                     )
                     conn.execute(
@@ -936,8 +904,7 @@ def render_factures():
 
                     dialog.close()
                     ui.notify(
-                        f"Facture {facture['numero_facture']} annulée. Les"
-                        " prestations ont été réouvertes.",
+                        f"Facture {facture['numero_facture']} annulée. Les prestations ont été réouvertes.",
                         type="info",
                         icon="assignment_return",
                     )
@@ -955,15 +922,13 @@ def render_factures():
 
             dialog.open()
 
-        # IMPRESSION PDF
         def imprimer_facture_pdf(facture):
             try:
-                pdf_path = pdf_factures.generer_et_ouvrir_pdf_facture(
+                pdf_factures.generer_et_ouvrir_pdf_facture(
                     facture["id"]
                 )
                 ui.notify(
-                    f"PDF de la facture {facture['numero_facture']} ouvert avec"
-                    " succès !",
+                    f"PDF de la facture {facture['numero_facture']} ouvert avec succès !",
                     type="positive",
                     icon="print",
                 )
@@ -975,7 +940,7 @@ def render_factures():
              
         def imprimer_recap_pdf(facture):
             try:
-                pdf_path = pdf_factures.generer_et_ouvrir_pdf_recap(
+                pdf_factures.generer_et_ouvrir_pdf_recap(
                     facture["id"]
                 )
                 ui.notify(
@@ -989,7 +954,6 @@ def render_factures():
                     type="negative",
                 )
 
-        # ENVOI EMAIL AVEC FACTURE + RÉCAPITULATIF AUTOMATIQUE SI OPTION CLIENT
         def ouvrir_dialog_email(facture):
             conn = database.get_conn()
             client = conn.execute(
@@ -1004,8 +968,7 @@ def render_factures():
 
             if not email_client:
                 ui.notify(
-                    "Attention : Ce client n'a pas d'adresse e-mail renseignée"
-                    " !",
+                    "Attention : Ce client n'a pas d'adresse e-mail renseignée !",
                     type="warning",
                     icon="warning",
                 )
@@ -1020,15 +983,12 @@ def render_factures():
                     "text-lg font-bold text-slate-800 border-b pb-2 w-full"
                 )
                 ui.label(
-                    f"Le document sera envoyé à :"
-                    f" {client['nom_societe'] if client else 'Client'}"
-                    f" ({email_client})"
+                    f"Le document sera envoyé à : {client['nom_societe'] if client else 'Client'} ({email_client})"
                 ).classes("text-sm text-slate-600")
 
                 if client and client["recap_interventions"] == 1:
                     ui.label(
-                        "📎 Le récapitulatif détaillé des prestations sera joint"
-                        " automatiquement à l'e-mail."
+                        "📎 Le récapitulatif détaillé des prestations sera joint automatiquement à l'e-mail."
                     ).classes("text-xs font-semibold text-info italic")
 
                 email_input = ui.input(
@@ -1041,11 +1001,10 @@ def render_factures():
                 msg_input = ui.textarea(
                     "Message",
                     value=(
-                        "Bonjour,\n\nVeuillez trouver ci-joint votre facture"
-                        f" {facture['numero_facture']}"
+                        "Bonjour,\n\nVeuillez trouver ci-joint votre facture "
+                        f"{facture['numero_facture']}"
                         + (
-                            " ainsi que le récapitulatif détaillé de vos"
-                            " prestations."
+                            " ainsi que le récapitulatif détaillé de vos prestations."
                             if client and client["recap_interventions"] == 1
                             else "."
                         )
@@ -1054,10 +1013,8 @@ def render_factures():
                 ).classes("w-full h-32")
 
                 def confirmer_envoi():
-                    # 1. Génération du PDF de la facture
                     pdf_path = pdf_factures.generer_pdf_facture(facture["id"])
 
-                    # 2. Gestion du récapitulatif si l'option du client est active
                     recap_path = None
                     recap_actif = False
                     if client and "recap_interventions" in client.keys():
@@ -1069,7 +1026,6 @@ def render_factures():
                         except Exception as e:
                             print(f"Erreur lors de la génération du récapitulatif : {e}")
 
-                    # 3. Envoi de l'e-mail avec la signature correcte de utils.py
                     dest = email_input.value.strip()
                     sujet = objet_input.value.strip()
                     corps = msg_input.value

@@ -1,6 +1,31 @@
 from datetime import datetime
+import multiprocessing
 import os
 import sys
+
+# --- CAPTURE DES ERREURS POUR L'EXE ---
+if getattr(sys, "frozen", False):
+  log_path = os.path.join(os.path.dirname(sys.executable), "erreur_fatale.txt")
+  sys.stdout = open(log_path, "w", encoding="utf-8")
+  sys.stderr = open(log_path, "w", encoding="utf-8")
+else:
+  if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+  if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+
+# Protection multiprocessing pour l'exécutable PyInstaller
+if __name__ == "__main__":
+  multiprocessing.freeze_support()
+
+if getattr(sys, "frozen", False):
+  application_path = os.path.dirname(sys.executable)
+else:
+  application_path = os.path.dirname(os.path.abspath(__file__))
+
+os.chdir(application_path)
+sys.path.insert(0, application_path)
+
 from auto_backup import lancer_sauvegarde_automatique
 import database
 from nicegui import app, ui
@@ -152,11 +177,9 @@ with ui.column().classes("w-full p-6 bg-slate-50 min-h-screen"):
   content_area()
 
 if __name__ in {"__main__", "__mp_main__"}:
-  is_frozen = getattr(sys, "frozen", False)
-
   ui.run(
       title="EasyFacture",
-      port=8080,
-      reload=not is_frozen,
+      port=9876,  # Port unique et aléatoire pour éviter tout conflit
+      reload=False,
       show=True,
   )
