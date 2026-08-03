@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import shutil
 import sqlite3
 
 DB_PATH = "FactureX.db"
@@ -230,6 +231,15 @@ def initialiser_bdd():
 
   conn.commit()
   conn.close()
+
+  # --- INITIALISATION DU LOGO PAR DÉFAUT ---
+  os.makedirs("assets", exist_ok=True)
+  chemin_logo = os.path.join("assets", "logo.png")
+  if not os.path.exists(chemin_logo):
+    # Si tu as placé un logo initial de secours dans ton projet (ex: logo_initial.png)
+    if os.path.exists("logo_initial.png"):
+      shutil.copy("logo_initial.png", chemin_logo)
+      print("✓ Logo par défaut initialisé dans assets/logo.png")
 
 
 # --- FONCTIONS UTILITAIRES ---

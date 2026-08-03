@@ -5,9 +5,6 @@ Archivage/
 export/
 auto_backups/
 
-# Fichiers de tests
-assets/logo.png
-
 # JSON pour sécu
 credentials.json
 token.json
