@@ -7,6 +7,9 @@ import zipfile
 import database
 from database import get_backup_path, save_backup_path
 from nicegui import ui
+import version  # Import du fichier de version centralisé[cite: 2]
+import subprocess
+import sys
 
 # Nom exact de la base de données SQLite
 DB_FILENAME = "FactureX.db"
@@ -103,9 +106,7 @@ def render_maintenance():
     # B. RESTAURER DIRECTEMENT
     def restaurer_sauvegarde(e):
       try:
-        # e.content donne accès au fichier téléversé par l'utilisateur
         with zipfile.ZipFile(e.content, "r") as zip_ref:
-          # 1. Extraction directe et écrasement propre des données actuelles
           zip_ref.extractall(".")
 
         ui.notify(
@@ -144,13 +145,22 @@ def render_maintenance():
       taille = os.path.getsize(DB_FILENAME) / 1024
       taille_bdd = f"{taille:.2f} Ko"
 
+    def verifier_maj_manuelle():
+      ui.notify("Vérification des mises à jour en cours...", type="info")
+      try:
+        # Lance un processus indépendant en arrière-plan pour vérifier la mise à jour
+        subprocess.Popen([sys.executable, "launcher.pyw", "--check-update"])
+      except Exception:
+        ui.notify("Impossible de lancer la vérification.", type="negative")
+
     with ui.row().classes("gap-8 items-center justify-between w-full"):
-      with ui.row().classes("gap-8"):
+      with ui.row().classes("gap-8 items-center"):
         with ui.column():
           ui.label("Version Logiciel").classes(
               "text-xs text-slate-400 font-bold"
           )
-          ui.label("v1.0.0").classes("text-sm text-slate-700")
+          # Utilisation dynamique de version.VERSION[cite: 2]
+          ui.label(f"v{version.VERSION}").classes("text-sm text-slate-700")
         with ui.column():
           ui.label("Base de données").classes(
               "text-xs text-slate-400 font-bold"
@@ -161,8 +171,12 @@ def render_maintenance():
         with ui.column():
           ui.label("Moteur").classes("text-xs text-slate-400 font-bold")
           ui.label("Python & NiceGUI").classes("text-sm text-slate-700")
+        
+        # Bouton pour forcer la mise à jour manuellement
+        with ui.column():
+          ui.button("Vérifier les mises à jour", icon="system_update", on_click=verifier_maj_manuelle).props("outline color=primary dense")
 
-      # La petite touche "se jeter des fleurs" alignée à droite
+      # La touche "se jeter des fleurs" alignée à droite
       with ui.column().classes("items-end"):
         ui.label("Powered by").classes("text-[10px] text-slate-400 uppercase tracking-wider font-semibold")
         ui.label("FacturEx by LuA").classes("text-sm font-extrabold text-primary")

@@ -1,8 +1,9 @@
 ; Script d'installation Inno Setup (Propre - Sans BDD personnelle)
 ; -------------------------------------------------------------------------------
 
+; Lecture dynamique de la version depuis version.py (ex: VERSION = "1.3")
+#define MyAppVersion GetFileVersion("version.py")
 #define MyAppName "EasyFacture"
-#define MyAppVersion "1.2"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 
@@ -20,7 +21,7 @@ AllowNoIcons=yes
 Compression=lzma
 SolidCompression=yes
 OutputDir=userdocs:InnoSetup Output
-OutputBaseFilename=Setup_EasyFacture_v1.2
+OutputBaseFilename=Setup_EasyFacture_v{#MyAppVersion}
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -34,6 +35,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Copie uniquement des fichiers source Python de l'application
 Source: "*.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "*.pyw"; DestDir: "{app}"; Flags: ignoreversion
+
+; Fichier HTML de chargement local pour le launcher
+Source: "loading.html"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Dossier des ressources (logos, images, etc.) - Sécurisé avec createallsubdirs
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
