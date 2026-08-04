@@ -25,7 +25,7 @@ def render_maintenance():
     with ui.row().classes("items-center gap-3"):
       ui.icon("folder_special", size="32px", color="primary")
       with ui.column():
-        ui.label("Emplacement des sauvegardes automatiques").classes(
+        ui.label("Emplacement des sauvegardes automatiques locales").classes(
             "text-lg font-bold text-slate-800"
         )
         ui.label(

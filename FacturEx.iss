@@ -1,4 +1,4 @@
-; Script d'installation Inno Setup (Mode Source / Python direct avec launcher)
+; Script d'installation Inno Setup (Propre - Sans BDD personnelle)
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
@@ -15,12 +15,12 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName=C:\FacturEx
 ; Nom du dossier dans le Menu Démarrer pour l'utilisateur
 DefaultGroupName=EasyFacture
-DisableDirPage=yes
+DisableDirPage=no
 AllowNoIcons=yes
 Compression=lzma
 SolidCompression=yes
 OutputDir=userdocs:InnoSetup Output
-OutputBaseFilename=Setup_EasyFacture_v1.0.0
+OutputBaseFilename=Setup_EasyFacture_v1.1
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -31,19 +31,18 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Copie de tous les fichiers source Python de l'application (y compris launcher.pyw) dans C:\FacturEx
+; Copie uniquement des fichiers source Python de l'application
 Source: "*.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "*.pyw"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Dossier des ressources (logos, images, etc.)
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Fichiers de configuration optionnels (credentials Google API, base de données si existante)
+; Fichier de configuration optionnel (credentials Google API s'il existe, pas de BDD)
 Source: "credentials.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "FactureX.db"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
-; Raccourci dans le Menu Démarrer (Exécute pythonw.exe avec launcher.pyw pour masquer la console)
+; Raccourci dans le Menu Démarrer
 Name: "{group}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"
 Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 
@@ -51,8 +50,8 @@ Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"; Tasks: desktopicon
 
 [Run]
-; 1. Installation automatique des dépendances requises via pip
-Filename: "pip"; Parameters: "install nicegui reportlab google-auth google-auth-oauthlib google-api-python-client"; Flags: runminimized waituntilterminated
+; 1. Installation automatique de toutes les dépendances requises pour l'utilisateur courant
+Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client"; Flags: runminimized waituntilterminated
 
 ; 2. Lancer l'application automatiquement à la fin de l'installation via pythonw
 Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
