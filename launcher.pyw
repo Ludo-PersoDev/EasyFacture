@@ -3,16 +3,8 @@ import subprocess
 import sys
 import time
 import webbrowser
-import urllib.request
 
 URL = "http://localhost:9876"
-
-def est_deja_lance():
-    try:
-        urllib.request.urlopen(URL, timeout=1)
-        return True
-    except Exception:
-        return False
 
 def kill_existing_instances():
     """Tue proprement les anciennes instances de app.py."""
@@ -37,16 +29,27 @@ def kill_existing_instances():
         pass
 
 if __name__ == "__main__":
-    # 1. On tue l'ancienne version si elle tourne (permet d'appliquer les mises à jour)
+    # 1. Nettoyage des anciennes instances
     kill_existing_instances()
-    time.sleep(0.5)
+    time.sleep(0.3)
 
-    # 2. On lance app.py en arrière-plan via pythonw de manière totalement indépendante
-    pythonw = sys.executable.replace("python.exe", "pythonw.exe")
-    script_app = os.path.join(os.path.dirname(__file__), "app.py")
+    # 2. Lancement du serveur NiceGUI en arrière-plan
+    script_dir = os.path.dirname(__file__)
+    script_app = os.path.join(script_dir, "app.py")
     
-    subprocess.Popen([pythonw, script_app], cwd=os.path.dirname(__file__))
+    python_exe = sys.executable
+    if "python.exe" in python_exe.lower():
+        pythonw_candidate = python_exe.replace("python.exe", "pythonw.exe")
+        if os.path.exists(pythonw_candidate):
+            python_exe = pythonw_candidate
 
-    # 3. On attend quelques secondes que le serveur se lance, puis on ouvre le navigateur
-    time.sleep(1.0)
-    webbrowser.open(URL)
+    subprocess.Popen([python_exe, script_app], cwd=script_dir)
+
+    # 3. Ouverture immédiate de la page de chargement locale dans le navigateur (en réutilisant l'onglet si possible)
+    loading_path = os.path.abspath(os.path.join(script_dir, "loading.html"))
+    
+    time.sleep(0.5)
+    if os.path.exists(loading_path):
+        webbrowser.open(f"file:///{loading_path.replace(os.sep, '/')}", new=0)
+    else:
+        webbrowser.open(URL, new=0)

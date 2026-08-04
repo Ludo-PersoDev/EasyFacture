@@ -725,8 +725,8 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
     return os.path.abspath(output_path)
 
 
-def generer_pdf_recap_facture(facture_id, output_path=None):
-    """Génère le PDF du récapitulatif détaillé des interventions (incluant les commentaires)."""
+def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Intervention(s)"):
+    """Génère le PDF du récapitulatif détaillé des interventions (avec totaux et nombre de prestations)."""
     conn = database.get_conn()
 
     query_facture = """
@@ -736,12 +736,12 @@ def generer_pdf_recap_facture(facture_id, output_path=None):
         WHERE f.id = ?
     """
     facture = conn.execute(query_facture, (facture_id,)).fetchone()
+    conn.close()
     if not facture:
-        conn.close()
         raise ValueError(f"Facture ID {facture_id} introuvable.")
     facture_dict = dict(facture)
 
-    # Note: On récupère par facture_id via interventions (ou facture_items si utilisé)
+    conn = database.get_conn()
     query_items = """
         SELECT 
             i.*, 
@@ -777,24 +777,13 @@ def generer_pdf_recap_facture(facture_id, output_path=None):
     COLOR_BORDER = colors.HexColor("#e2e8f0")
 
     style_title = ParagraphStyle(
-        "TitleStyle",
-        parent=styles["Normal"],
-        fontSize=16,
-        leading=20,
-        textColor=COLOR_PRIMARY,
-        fontName="Helvetica-Bold",
+        "TitleStyle", parent=styles["Normal"], fontSize=16, leading=20, textColor=COLOR_PRIMARY, fontName="Helvetica-Bold"
     )
     style_sub = ParagraphStyle(
         "SubStyle", parent=styles["Normal"], fontSize=10, leading=14, textColor=COLOR_TEXT
     )
     style_th = ParagraphStyle(
-        "THStyle",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
-        textColor=colors.white,
-        fontName="Helvetica-Bold",
-        alignment=1,
+        "THStyle", parent=styles["Normal"], fontSize=9, leading=12, textColor=colors.white, fontName="Helvetica-Bold", alignment=1
     )
     style_cell = ParagraphStyle(
         "Cell", parent=styles["Normal"], fontSize=8, leading=11, textColor=COLOR_TEXT
@@ -804,24 +793,12 @@ def generer_pdf_recap_facture(facture_id, output_path=None):
     )
 
     elements = []
-    elements.append(
-        Paragraph(
-            f"RÉCAPITULATIF DES PRESTATIONS - FACTURE {facture_dict['numero_facture']}",
-            style_title,
-        )
-    )
-    elements.append(
-        Paragraph(
-            f"<b>Client :</b> {facture_dict['nom_societe']} | Émis le {format_date_fr(facture_dict['date_creation'])}",
-            style_sub,
-        )
-    )
+    elements.append(Paragraph(f"RÉCAPITULATIF DES PRESTATIONS - FACTURE {facture_dict['numero_facture']}", style_title))
+    elements.append(Paragraph(f"<b>Client :</b> {facture_dict['nom_societe']} | Émis le {format_date_fr(facture_dict['date_creation'])}", style_sub))
     elements.append(Spacer(1, 0.5 * cm))
 
     if not interventions:
-        elements.append(
-            Paragraph("Aucune prestation détaillée liée à cette facture.", style_sub)
-        )
+        elements.append(Paragraph("Aucune prestation détaillée liée à cette facture.", style_sub))
     else:
         etabs_set = set()
         for it in interventions:
@@ -843,7 +820,6 @@ def generer_pdf_recap_facture(facture_id, output_path=None):
         num_cols = len(etabs_list) + 2
         page_width = landscape(A4)[0] - 3 * cm
         col_width = page_width / num_cols
-
         col_widths = [4 * cm] + [col_width] * (len(etabs_list) + 1)
 
         table_data = []
@@ -854,20 +830,21 @@ def generer_pdf_recap_facture(facture_id, output_path=None):
         table_data.append(header_row)
 
         total_general_mois = 0.0
+        total_general_nombre = 0
 
         for sem_lib, items_sem in semaines_dict.items():
             row = [Paragraph(f"<b>{sem_lib}</b>", style_cell)]
             total_semaine = 0.0
+            nombre_semaine = 0
 
             for etab in etabs_list:
-                matches = [
-                    x for x in items_sem if (x["etablissement_nom"] or "Autre") == etab
-                ]
+                matches = [x for x in items_sem if (x["etablissement_nom"] or "Autre") == etab]
                 cell_texts = []
                 for m in matches:
                     d_fr = format_date_fr(m["date"])
                     montant_ligne = (m["prix_final_ht"] or 0.0) * (m["quantite"] or 1.0)
                     total_semaine += montant_ligne
+                    nombre_semaine += 1
                     
                     desc_courte = m["prest_nom"] or f"Interv. {m['id']}"
                     if m.get('commentaire'):
@@ -879,13 +856,17 @@ def generer_pdf_recap_facture(facture_id, output_path=None):
                 row.append(Paragraph(contenu, style_cell_center))
 
             total_general_mois += total_semaine
-            row.append(Paragraph(f"<b>{total_semaine:.0f} €</b>", style_cell_center))
+            total_general_nombre += nombre_semaine
+
+            # Ligne total semaine avec montant + nombre de prestations
+            row.append(Paragraph(f"<b>{total_semaine:.0f} €</b><br/><font size='7' color='#64748b'>({nombre_semaine} {intitule})</font>", style_cell_center))
             table_data.append(row)
 
+        # Ligne total mois
         total_row = [Paragraph("<b>TOTAL MOIS</b>", style_th)]
         for etab in etabs_list:
             total_row.append(Paragraph("-", style_th))
-        total_row.append(Paragraph(f"<b>{total_general_mois:.0f} €</b>", style_th))
+        total_row.append(Paragraph(f"<b>{total_general_mois:.0f} €</b><br/><font size='7'>({total_general_nombre} {intitule})</font>", style_th))
         table_data.append(total_row)
 
         t_style = [
@@ -912,9 +893,9 @@ def generer_et_ouvrir_pdf_facture(facture_id, output_path=None):
     return pdf_path
 
 
-def generer_et_ouvrir_pdf_recap(facture_id, output_path=None):
+def generer_et_ouvrir_pdf_recap(facture_id, output_path=None, intitule="Intervention(s)"):
     """Génère le PDF du récapitulatif ET l'ouvre automatiquement."""
-    pdf_path = generer_pdf_facture_recap_explicite(facture_id, output_path) # alias ou direct
+    pdf_path = generer_pdf_recap_facture(facture_id, output_path, intitule=intitule)
     webbrowser.open(os.path.abspath(pdf_path))
     return pdf_path
 

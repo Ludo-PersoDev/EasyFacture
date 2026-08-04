@@ -361,9 +361,17 @@ def render_factures():
                 ).classes(
                     "text-xl font-bold text-slate-800 border-b pb-2 w-full"
                 )
-                ui.label(
-                    f"Client : {facture.get('client_nom', '')} | Période de référence du mois"
-                ).classes("text-sm text-slate-600 font-medium")
+                
+                with ui.row().classes("w-full items-center gap-4"):
+                    ui.label(
+                        f"Client : {facture.get('client_nom', '')} | Période de référence du mois"
+                    ).classes("text-sm text-slate-600 font-medium flex-1")
+                    
+                    intitule_select = ui.select(
+                        ["Intervention(s)", "Séance(s)", "Prestation(s)", "Heure(s)", "Cours(s)"],
+                        value="Intervention(s)",
+                        label="Intitulé du compteur"
+                    ).classes("w-48").props("dense outlined")
 
                 conn = database.get_conn()
                 query_items = """
@@ -408,7 +416,12 @@ def render_factures():
                             semaines_dict[sem_key] = []
                         semaines_dict[sem_key].append(dict(it))
 
-                    with ui.column().classes("w-full overflow-x-auto"):
+                    table_holder = ui.column().classes("w-full")
+
+                    def rafraichir_tableau_recap():
+                        table_holder.clear()
+                        intitule_choisi = intitule_select.value or "Intervention(s)"
+
                         table_html = [
                             "<table class='w-full border-collapse border border-slate-300 text-sm text-left'>"
                         ]
@@ -428,6 +441,7 @@ def render_factures():
                         table_html.append("</tr>")
 
                         total_general_mois = 0.0
+                        total_general_nombre = 0
 
                         for sem_lib, items_sem in semaines_dict.items():
                             table_html.append("<tr>")
@@ -436,6 +450,8 @@ def render_factures():
                             )
 
                             total_semaine = 0.0
+                            nombre_semaine = 0
+
                             for etab in etabs_list:
                                 matches = [
                                     x
@@ -450,6 +466,8 @@ def render_factures():
                                         m["prix_final_ht"] or 0.0
                                     ) * (m["quantite"] or 1.0)
                                     total_semaine += montant_ligne
+                                    nombre_semaine += 1
+                                    
                                     desc_courte = (
                                         m["prest_nom"]
                                         or f"Intervention N°{m['id']}"
@@ -470,8 +488,10 @@ def render_factures():
                                 )
 
                             total_general_mois += total_semaine
+                            total_general_nombre += nombre_semaine
+
                             table_html.append(
-                                f"<td class='border border-slate-300 p-2.5 text-center font-bold bg-slate-50'>{total_semaine:.0f}€</td>"
+                                f"<td class='border border-slate-300 p-2.5 text-center font-bold bg-slate-50'>{total_semaine:.0f}€<br/><span class='text-xs font-normal text-slate-500'>({nombre_semaine} {intitule_choisi})</span></td>"
                             )
                             table_html.append("</tr>")
 
@@ -486,12 +506,16 @@ def render_factures():
                                 "<td class='border border-slate-300 p-3 text-center'>-</td>"
                             )
                         table_html.append(
-                            f"<td class='border border-slate-300 p-3 text-center'>{total_general_mois:.0f}€</td>"
+                            f"<td class='border border-slate-300 p-3 text-center'>{total_general_mois:.0f}€<br/><span class='text-xs font-normal text-sky-200'>({total_general_nombre} {intitule_choisi})</span></td>"
                         )
                         table_html.append("</tr>")
                         table_html.append("</table>")
 
-                        ui.html("".join(table_html)).classes("w-full")
+                        with table_holder:
+                            ui.html("".join(table_html)).classes("w-full")
+
+                    intitule_select.on_value_change(lambda _: rafraichir_tableau_recap())
+                    rafraichir_tableau_recap()
 
                 with ui.row().classes("w-full justify-end gap-2 mt-4"):
                     ui.button("Fermer", on_click=dialog.close).props(
@@ -500,7 +524,7 @@ def render_factures():
                     ui.button(
                         "Imprimer le récapitulatif",
                         icon="print",
-                        on_click=lambda: imprimer_recap_pdf(facture),
+                        on_click=lambda: imprimer_recap_pdf(facture, intitule_select.value),
                     ).props("color=primary font-bold")
 
             dialog.open()
@@ -511,49 +535,140 @@ def render_factures():
                 ui.notify("Aucun client trouvé.", type="warning")
                 return
 
+            # Modale élargie (max-w-6xl) pour accueillir proprement les 2 colonnes
             with ui.dialog() as dialog, ui.card().classes(
-                "p-6 space-y-4 w-full max-w-3xl"
+                "p-8 space-y-6 w-full max-w-6xl bg-white rounded-2xl shadow-2xl"
             ):
                 ui.label("Générer une nouvelle Facture").classes(
-                    "text-xl font-bold text-slate-800 border-b pb-2 w-full"
+                    "text-2xl font-bold text-slate-800 border-b pb-3 w-full"
                 )
 
-                client_options = {c["id"]: c["nom_societe"] for c in clients}
-                client_select = ui.select(
-                    client_options,
-                    label="Sélectionnez le Client",
-                    value=clients[0]["id"],
-                ).classes("w-full")
+                # Conteneur principal en 2 colonnes égales
+                with ui.row().classes("w-full gap-8 items-start"):
+                    
+                    # ----------------------------------------------------
+                    # COLONNE DE GAUCHE : Client, Options, Échéances
+                    # ----------------------------------------------------
+                    with ui.column().classes("w-1/2 space-y-5"):
+                        ui.label("1. Paramètres de la facture").classes("text-sm font-bold text-slate-700 uppercase tracking-wide")
 
-                ui.label(
-                    "Sélection rapide des prestations à facturer :"
-                ).classes(
-                    "text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1"
-                )
-                with ui.row().classes("w-full gap-2 items-center flex-wrap mb-2"):
-                    btn_m_prec = ui.button(
-                        "Mois précédent", icon="event_repeat"
-                    ).props("dense outline color=slate text-xs")
-                    btn_m_cours = ui.button(
-                        "Mois en cours", icon="today"
-                    ).props("dense outline color=primary text-xs")
-                    btn_deselect = ui.button(
-                        "Tout décocher", icon="clear_all"
-                    ).props("dense flat color=negative text-xs")
-                    btn_select_all = ui.button(
-                        "Tout cocher", icon="select_all"
-                    ).props("dense flat color=slate text-xs")
+                        client_options = {c["id"]: c["nom_societe"] for c in clients}
+                        client_select = ui.select(
+                            client_options,
+                            label="Sélectionnez le Client",
+                            value=clients[0]["id"],
+                        ).classes("w-full").props("outlined dense")
 
-                prestations_container = ui.column().classes(
-                    "w-full max-h-60 overflow-y-auto border p-3 rounded-lg bg-slate-50 space-y-2"
-                )
-                totaux_container = ui.row().classes(
-                    "w-full justify-between items-center bg-slate-100 p-3 rounded-lg font-semibold text-slate-800"
-                )
+                        # Conteneur dynamique pour l'option de l'intitulé si le client a le récap actif
+                        recap_options_container = ui.column().classes("w-full")
+                        intitule_select_modal_holder = {"select": None}
+
+                        date_aujourdhui_obj = datetime.now().date()
+                        date_emiss_fr = date_aujourdhui_obj.strftime("%d/%m/%Y")
+                        date_emiss_iso = date_aujourdhui_obj.strftime("%Y-%m-%d")
+
+                        options_echeance = {
+                            'Comptant': 'Paiement comptant',
+                            '8 jours': 'Paiement à 8 jours',
+                            '15 jours': 'Paiement à 15 jours',
+                            '30 jours': 'Paiement à 30 jours',
+                            '45 jours': 'Paiement à 45 jours',
+                            '60 jours': 'Paiement à 60 jours',
+                        }
+
+                        delais_jours = {
+                            'Comptant': 0,
+                            '8 jours': 8,
+                            '15 jours': 15,
+                            '30 jours': 30,
+                            '45 jours': 45,
+                            '60 jours': 60,
+                        }
+
+                        with ui.row().classes("w-full gap-4 items-center"):
+                            ui.input("Date d'émission", value=date_emiss_fr).props(
+                                "dense outlined readonly bg-slate-100 cursor-not-allowed"
+                            ).classes("w-1/2")
+
+                            select_delai = ui.select(
+                                options_echeance,
+                                value="30 jours",
+                                label="Conditions de règlement",
+                            ).classes("w-1/2").props("dense outlined")
+
+                        echeance_label = ui.label("").classes(
+                            "text-xs font-semibold text-slate-500 italic w-full text-right"
+                        )
+
+                        def calculer_date_echeance():
+                            choix = select_delai.value or '30 jours'
+                            jours = delais_jours.get(choix, 30)
+                            dt_echeance_obj = date_aujourdhui_obj + timedelta(
+                                days=jours
+                            )
+                            echeance_label.set_text(
+                                f"Échéance calculée au : {dt_echeance_obj.strftime('%d/%m/%Y')}"
+                            )
+                            return dt_echeance_obj.strftime("%Y-%m-%d")
+
+                        select_delai.on_value_change(lambda _: calculer_date_echeance())
+                        calculer_date_echeance()
+
+                    # ----------------------------------------------------
+                    # COLONNE DE DROITE : Prestations, Sélection, Totaux
+                    # ----------------------------------------------------
+                    with ui.column().classes("w-1/2 space-y-4 flex-1"):
+                        ui.label("2. Sélection des prestations à facturer").classes("text-sm font-bold text-slate-700 uppercase tracking-wide")
+
+                        with ui.row().classes("w-full gap-2 items-center flex-wrap"):
+                            btn_m_prec = ui.button(
+                                "Mois précédent", icon="event_repeat"
+                            ).props("dense outline color=slate text-xs")
+                            btn_m_cours = ui.button(
+                                "Mois en cours", icon="today"
+                            ).props("dense outline color=primary text-xs")
+                            btn_deselect = ui.button(
+                                "Tout décocher", icon="clear_all"
+                            ).props("dense flat color=negative text-xs")
+                            btn_select_all = ui.button(
+                                "Tout cocher", icon="select_all"
+                            ).props("dense flat color=slate text-xs")
+
+                        # Conteneur des prestations bien large et confortable (hauteur augmentée)
+                        prestations_container = ui.column().classes(
+                            "w-full h-80 overflow-y-auto border border-slate-200 p-4 rounded-xl bg-slate-50/50 space-y-2.5"
+                        )
+                        
+                        totaux_container = ui.row().classes(
+                            "w-full justify-between items-center bg-slate-100 p-4 rounded-xl font-semibold text-slate-800"
+                        )
 
                 cochables_holder = {}
 
+                def verifier_et_afficher_options_recap(client_id):
+                    conn = database.get_conn()
+                    client_res = conn.execute(
+                        "SELECT recap_interventions FROM clients WHERE id = ?",
+                        (client_id,)
+                    ).fetchone()
+                    conn.close()
+
+                    recap_active = client_res and client_res["recap_interventions"] == 1
+                    recap_options_container.clear()
+                    intitule_select_modal_holder["select"] = None
+                    
+                    if recap_active:
+                        with recap_options_container:
+                            with ui.card().classes("w-full p-4 bg-sky-50/60 border border-sky-200 rounded-xl space-y-2 shadow-sm"):
+                                ui.label("📊 Options du récapitulatif des prestations").classes("text-xs font-bold text-sky-800 uppercase tracking-wide")
+                                intitule_select_modal_holder["select"] = ui.select(
+                                    ["Intervention(s)", "Séance(s)", "Prestation(s)", "Heure(s)", "Cours(s)"],
+                                    value="Intervention(s)",
+                                    label="Intitulé du compteur pour le récapitulatif"
+                                ).classes("w-full bg-white").props("dense outlined")
+
                 def charger_prestations_realisees(client_id):
+                    verifier_et_afficher_options_recap(client_id)
                     prestations_container.clear()
                     cochables_holder.clear()
 
@@ -593,7 +708,7 @@ def render_factures():
                                 txt_label,
                                 value=cocher_defaut,
                                 on_change=lambda _: maj_totaux(),
-                            )
+                            ).classes("py-0.5")
                             cochables_holder[i_dict["id"]] = {
                                 "checkbox": chk,
                                 "data": i_dict,
@@ -665,57 +780,6 @@ def render_factures():
                     lambda e: charger_prestations_realisees(e.value)
                 )
                 charger_prestations_realisees(client_select.value)
-
-                date_aujourdhui_obj = datetime.now().date()
-                date_emiss_fr = date_aujourdhui_obj.strftime("%d/%m/%Y")
-                date_emiss_iso = date_aujourdhui_obj.strftime("%Y-%m-%d")
-
-                options_echeance = {
-                    'Comptant': 'Paiement comptant',
-                    '8 jours': 'Paiement à 8 jours',
-                    '15 jours': 'Paiement à 15 jours',
-                    '30 jours': 'Paiement à 30 jours',
-                    '45 jours': 'Paiement à 45 jours',
-                    '60 jours': 'Paiement à 60 jours',
-                }
-
-                delais_jours = {
-                    'Comptant': 0,
-                    '8 jours': 8,
-                    '15 jours': 15,
-                    '30 jours': 30,
-                    '45 jours': 45,
-                    '60 jours': 60,
-                }
-
-                with ui.row().classes("w-full gap-4 items-center pt-2"):
-                    ui.input("Date d'émission", value=date_emiss_fr).props(
-                        "dense outlined readonly bg-slate-100 cursor-not-allowed"
-                    ).classes("w-1/2")
-
-                    select_delai = ui.select(
-                        options_echeance,
-                        value="30 jours",
-                        label="Conditions de règlement",
-                    ).classes("w-1/2")
-
-                echeance_label = ui.label("").classes(
-                    "text-xs font-semibold text-slate-500 italic w-full text-right"
-                )
-
-                def calculer_date_echeance():
-                    choix = select_delai.value or '30 jours'
-                    jours = delais_jours.get(choix, 30)
-                    dt_echeance_obj = date_aujourdhui_obj + timedelta(
-                        days=jours
-                    )
-                    echeance_label.set_text(
-                        f"Échéance calculée au : {dt_echeance_obj.strftime('%d/%m/%Y')}"
-                    )
-                    return dt_echeance_obj.strftime("%Y-%m-%d")
-
-                select_delai.on_value_change(lambda _: calculer_date_echeance())
-                calculer_date_echeance()
 
                 def generer_facture():
                     client_id = client_select.value
@@ -796,6 +860,11 @@ def render_factures():
                     conn.commit()
                     conn.close()
 
+                    intitule_choisi = "Intervention(s)"
+                    sel_widget = intitule_select_modal_holder["select"]
+                    if client_info and client_info["recap_interventions"] == 1 and sel_widget and sel_widget.value:
+                        intitule_choisi = sel_widget.value
+
                     try:
                         pdf_factures.generer_pdf_facture(facture_id)
                         if client_info and client_info["recap_interventions"] == 1:
@@ -803,7 +872,7 @@ def render_factures():
                                 pdf_factures, "generer_pdf_recap_facture"
                             ):
                                 pdf_factures.generer_pdf_recap_facture(
-                                    facture_id
+                                    facture_id, intitule=intitule_choisi
                                 )
                     except Exception as e:
                         print(f"Erreur génération PDF auto : {e}")
@@ -816,7 +885,8 @@ def render_factures():
                     dialog.close()
                     rafraichir_liste()
 
-                with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                # Boutons de validation en bas de la modale
+                with ui.row().classes("w-full justify-end gap-3 pt-4 border-t border-slate-100"):
                     ui.button("Annuler", on_click=dialog.close).props(
                         "flat color=slate"
                     )
@@ -824,7 +894,7 @@ def render_factures():
                         "Valider et Générer",
                         icon="receipt",
                         on_click=generer_facture,
-                    ).props("color=primary font-bold")
+                    ).props("color=primary font-bold px-4 py-2")
 
             dialog.open()
 
@@ -938,10 +1008,10 @@ def render_factures():
                     type="negative",
                 )
              
-        def imprimer_recap_pdf(facture):
+        def imprimer_recap_pdf(facture, intitule="Intervention(s)"):
             try:
                 pdf_factures.generer_et_ouvrir_pdf_recap(
-                    facture["id"]
+                    facture["id"], intitule=intitule
                 )
                 ui.notify(
                     f"PDF du récapitulatif ouvert avec succès !",

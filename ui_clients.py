@@ -1,3 +1,6 @@
+import os
+import subprocess
+from datetime import datetime
 from nicegui import ui
 import database
 
@@ -130,6 +133,10 @@ def render_clients():
                             
                             buttons_container.clear()
                             with buttons_container:
+                                # Bouton Explorateur de PDF corrigé (avec une seule icône loupe)
+                                ui.button("Chercher PDF", icon="search", 
+                                          on_click=lambda: ouvrir_explorateur_pdf_client(client_sel['nom_societe'])).props("outline color=cyan-9 dense")
+
                                 # Bouton Sites (uniquement si multisite)
                                 if client_sel.get('multi_etab'):
                                     ui.button("Établissements / Sites", icon="business", 
@@ -163,6 +170,180 @@ def render_clients():
                     with actions_bar:
                         label_selection
                         buttons_container
+
+        # --- MODALE EXPLORATEUR DE PDF CLIENT (CORRIGÉE AVEC LISTE INTERACTIVE) ---
+        def ouvrir_explorateur_pdf_client(client_nom: str):
+            dossier_export_base = os.path.join(os.getcwd(), "Export")
+            dossier_client = os.path.join(dossier_export_base, client_nom)
+            
+            with ui.dialog() as dialog, ui.card().classes('w-[750px] p-6'):
+                ui.label(f'Explorateur de documents - {client_nom}').classes('text-xl font-bold text-slate-800 mb-4')
+                
+                types_disponibles = []
+                if os.path.exists(dossier_client):
+                    types_disponibles = [d for d in os.listdir(dossier_client) if os.path.isdir(os.path.join(dossier_client, d))]
+                
+                if not types_disponibles:
+                    types_disponibles = ["Factures", "Devis"]
+                    
+                selected_type = ui.select(types_disponibles, label="Type de fichier", value=types_disponibles[0] if types_disponibles else "").classes('w-full mb-3').props('dense outlined')
+                
+                with ui.row().classes('w-full gap-4'):
+                    select_annee = ui.select([], label="Année").classes('flex-1').props('dense outlined')
+                    select_mois = ui.select([], label="Mois").classes('flex-1').props('dense outlined')
+
+                container_fichiers = ui.column().classes('w-full my-4 border rounded-lg p-4 bg-slate-50 min-h-[160px] max-h-[250px] overflow-y-auto')
+                
+                selected_pdf = {"path": None}
+                fichiers_charges = []
+                cartes_fichiers = [] # Pour stocker les références visuelles et gérer la sélection
+
+                def filtrer_affichage_fichiers():
+                    container_fichiers.clear()
+                    cartes_fichiers.clear()
+                    annee_choisie = select_annee.value
+                    mois_choisi = select_mois.value
+
+                    if not annee_choisie or not mois_choisi:
+                        with container_fichiers:
+                            ui.label("Veuillez sélectionner une année et un mois.").classes('text-slate-400 italic')
+                        selected_pdf["path"] = None
+                        return
+
+                    fichiers_filtres = [
+                        f for f in fichiers_charges 
+                        if f["annee"] == annee_choisie and f["mois"] == mois_choisi
+                    ]
+
+                    if not fichiers_filtres:
+                        with container_fichiers:
+                            ui.label("Aucun document pour cette période.").classes('text-slate-400 italic')
+                        selected_pdf["path"] = None
+                        return
+
+                    with container_fichiers:
+                        ui.label(f"{len(fichiers_filtres)} document(s) trouvé(s)").classes('text-xs font-semibold text-slate-500 mb-2')
+                        
+                        # Sélection par défaut du premier élément
+                        selected_pdf["path"] = fichiers_filtres[0]["path"]
+
+                        def selectionner_fichier(path, card_element):
+                            selected_pdf["path"] = path
+                            # Met à jour le style visuel de toutes les cartes
+                            for c, p in cartes_fichiers:
+                                if p == path:
+                                    c.classes(remove='bg-white border-slate-200', add='bg-cyan-50 border-cyan-500 shadow-sm')
+                                else:
+                                    c.classes(remove='bg-cyan-50 border-cyan-500 shadow-sm', add='bg-white border-slate-200')
+
+                        for i, f in enumerate(fichiers_filtres):
+                            is_first = (i == 0)
+                            # On crée une carte cliquable propre pour chaque PDF
+                            card_classes = "w-full p-3 rounded-lg border cursor-pointer transition-all flex justify-between items-center mb-2 "
+                            card_classes += "bg-cyan-50 border-cyan-500 shadow-sm" if is_first else "bg-white border-slate-200 hover:border-slate-300"
+                            
+                            with ui.row().classes(card_classes) as card:
+                                with ui.column().classes("gap-0"):
+                                    ui.label(f['name']).classes("font-medium text-slate-800 text-sm")
+                                    ui.label(f"Créé le : {f['date'].strftime('%d/%m/%Y à %H:%M')}").classes("text-xs text-slate-500")
+                                ui.icon("description", color="primary" if is_first else "grey-5").classes("text-xl")
+
+                            cartes_fichiers.append((card, f["path"]))
+                            # Associe le clic sur la carte au choix du fichier
+                            card.on('click', lambda _, p=f["path"], c=card: selectionner_fichier(p, c))
+
+                def mettre_a_jour_mois():
+                    annee_choisie = select_annee.value
+                    mois_set = set()
+                    for f in fichiers_charges:
+                        if f["annee"] == annee_choisie:
+                            mois_set.add(f["mois"])
+                    
+                    liste_mois = sorted(list(mois_set), reverse=True)
+                    select_mois.options = liste_mois
+                    if liste_mois:
+                        select_mois.value = liste_mois[0]
+                    else:
+                        select_mois.value = None
+                        container_fichiers.clear()
+                        with container_fichiers:
+                            ui.label("Aucun document pour cette période.").classes('text-slate-400 italic')
+                    filtrer_affichage_fichiers()
+
+                def charger_fichiers():
+                    type_choisi = selected_type.value
+                    dossier_type = os.path.join(dossier_client, type_choisi)
+                    
+                    container_fichiers.clear()
+                    fichiers_charges.clear()
+                    select_annee.options = []
+                    select_mois.options = []
+                    select_annee.value = None
+                    select_mois.value = None
+
+                    if not os.path.exists(dossier_type):
+                        with container_fichiers:
+                            ui.label("Aucun dossier trouvé pour ce type.").classes('text-slate-400 italic')
+                        return
+
+                    annees_set = set()
+                    for file in os.listdir(dossier_type):
+                        if file.lower().endswith('.pdf'):
+                            chemin_complet = os.path.join(dossier_type, file)
+                            timestamp = os.path.getmtime(chemin_complet)
+                            date_file = datetime.fromtimestamp(timestamp)
+                            
+                            annee = str(date_file.year)
+                            mois = date_file.strftime('%m - %B')
+                            
+                            annees_set.add(annee)
+                            fichiers_charges.append({
+                                "path": chemin_complet,
+                                "name": file,
+                                "annee": annee,
+                                "mois": mois,
+                                "date": date_file
+                            })
+
+                    if not fichiers_charges:
+                        with container_fichiers:
+                            ui.label("Aucun PDF trouvé dans cette catégorie.").classes('text-slate-400 italic')
+                        return
+
+                    liste_annees = sorted(list(annees_set), reverse=True)
+                    select_annees = liste_annees
+                    select_annee.options = select_annees
+                    if select_annees:
+                        select_annee.value = select_annees[0]
+
+                selected_type.on_value_change(lambda: charger_fichiers())
+                select_annee.on_value_change(lambda: mettre_a_jour_mois())
+                select_mois.on_value_change(lambda: filtrer_affichage_fichiers())
+
+                charger_fichiers()
+
+                with ui.row().classes('w-full justify-between items-center mt-6'):
+                    def ouvrir_dans_explorer():
+                        path = selected_pdf["path"]
+                        if path and os.path.exists(path):
+                            subprocess.run(f'explorer /select, "{os.path.normpath(path)}"')
+                        else:
+                            ui.notify("Veuillez sélectionner un fichier valide.", type="warning")
+
+                    ui.button("Ouvrir dans l'explorer", icon="folder_open", on_click=ouvrir_dans_explorer).props('outline color=primary dense')
+
+                    with ui.row().classes('gap-2'):
+                        def ouvrir_pdf_selectionne():
+                            path = selected_pdf["path"]
+                            if path and os.path.exists(path):
+                                os.startfile(path)
+                            else:
+                                ui.notify("Veuillez sélectionner un fichier valide.", type="warning")
+
+                        ui.button("Ouvrir le PDF", icon="visibility", on_click=ouvrir_pdf_selectionne).props('color=primary dense')
+                        ui.button("Fermer", on_click=dialog.close).props('flat dense')
+
+            dialog.open()
 
         # --- MODALE CRÉATION / ÉDITION CLIENT ---
         def ouvrir_dialogue_client(client=None):

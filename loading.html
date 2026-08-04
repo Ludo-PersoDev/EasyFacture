@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>EasyFacture - Démarrage</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #1e293b;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .logo {
+            font-size: 26px;
+            font-weight: bold;
+            color: #0284c7;
+            margin-bottom: 5px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+        .spinner {
+            font-size: 40px;
+            animation: spin 2s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status {
+            font-size: 14px;
+            font-weight: 600;
+            color: #334155;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">EasyFacture</div>
+        <div class="subtitle">Gestion de facturation & prestations</div>
+        <div class="spinner">⚙️</div>
+        <div class="status" id="status-text">Démarrage du serveur en cours...</div>
+    </div>
+
+    <script>
+        const targetUrl = "http://localhost:9876";
+
+        function verifierServeur() {
+            // Utilisation d'une requête Image pour contourner les blocages CORS et tester le port instantanément
+            const img = new Image();
+            img.onload = function() {
+                // Le serveur a répondu ! On bascule sur l'application
+                window.location.href = targetUrl;
+            };
+            img.onerror = function() {
+                // Le serveur n'est pas encore prêt, on retente dans 1 seconde
+                setTimeout(verifierServeur, 1000);
+            };
+            // On tente de charger une ressource fictive sur le serveur local pour déclencher le test
+            img.src = targetUrl + "/favicon.ico?" + new Date().getTime();
+        }
+
+        // Premier lancement du test après 1.5 seconde
+        setTimeout(verifierServeur, 1500);
+    </script>
+</body>
+</html>
