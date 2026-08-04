@@ -176,14 +176,10 @@ with ui.header().classes(
 with ui.column().classes("w-full p-6 bg-slate-50 min-h-screen"):
   content_area()
 
-def main():
-  ui.run(
-      title="EasyFacture",
-      port=9876,
-      reload=False,
-      show=False,  # On met show=False car le launcher gère déjà l'ouverture du navigateur via webbrowser.open()
-  )
-
-
 if __name__ in {"__main__", "__mp_main__"}:
-  main()
+    ui.run(
+        title="EasyFacture",
+        port=9876,
+        reload=False,
+        show=False,
+    )

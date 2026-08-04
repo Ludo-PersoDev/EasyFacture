@@ -1,22 +1,30 @@
 import os
 import subprocess
 import sys
+import time
 import webbrowser
 import urllib.request
-import time
 
 URL = "http://localhost:9876"
 
+def est_deja_lance():
+    try:
+        urllib.request.urlopen(URL, timeout=1)
+        return True
+    except Exception:
+        return False
+
 def kill_existing_instances():
-    """Tue les instances précédentes pour forcer le rechargement du code mis à jour."""
+    """Tue proprement les anciennes instances de app.py."""
     current_pid = os.getpid()
     try:
         output = subprocess.check_output(
             'wmic process where "name=\'pythonw.exe\'" get ProcessId,CommandLine',
             shell=True,
-        ).decode(errors='ignore')
+        ).decode(errors="ignore")
+
         for line in output.splitlines():
-            if "app.py" in line or "launcher.pyw" in line:
+            if "app.py" in line and "launcher.pyw" not in line:
                 parts = line.strip().split()
                 if parts:
                     try:
@@ -29,19 +37,16 @@ def kill_existing_instances():
         pass
 
 if __name__ == "__main__":
-    # 1. On tue les éventuels vieux serveurs zombies/lancés avant la mise à jour
+    # 1. On tue l'ancienne version si elle tourne (permet d'appliquer les mises à jour)
     kill_existing_instances()
-    
-    # Petite pause pour laisser Windows libérer le port proprement
     time.sleep(0.5)
 
-    # 2. On importe et lance l'application fraîchement mise à jour
-    import app
+    # 2. On lance app.py en arrière-plan via pythonw de manière totalement indépendante
+    pythonw = sys.executable.replace("python.exe", "pythonw.exe")
+    script_app = os.path.join(os.path.dirname(__file__), "app.py")
+    
+    subprocess.Popen([pythonw, script_app], cwd=os.path.dirname(__file__))
 
-    # Ouvre le navigateur un petit instant après le lancement
+    # 3. On attend quelques secondes que le serveur se lance, puis on ouvre le navigateur
+    time.sleep(1.0)
     webbrowser.open(URL)
-
-    # 3. Point d'entrée de l'application (exécute NiceGUI et bloque le thread proprement)
-    # Assure-toi que ton app.py appelle ui.run(port=9876, reload=False) dedans
-    if hasattr(app, "main"):
-        app.main()

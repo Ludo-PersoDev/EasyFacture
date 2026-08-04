@@ -2,7 +2,7 @@
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.2"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 
@@ -20,7 +20,7 @@ AllowNoIcons=yes
 Compression=lzma
 SolidCompression=yes
 OutputDir=userdocs:InnoSetup Output
-OutputBaseFilename=Setup_EasyFacture_v1.1
+OutputBaseFilename=Setup_EasyFacture_v1.2
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 
@@ -35,10 +35,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "*.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "*.pyw"; DestDir: "{app}"; Flags: ignoreversion
 
-; Dossier des ressources (logos, images, etc.)
-Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Dossier des ressources (logos, images, etc.) - Sécurisé avec createallsubdirs
+Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
-; Fichier de configuration optionnel (credentials Google API s'il existe, pas de BDD)
+; Fichier de configuration optionnel (credentials Google API s'il existe)
 Source: "credentials.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
