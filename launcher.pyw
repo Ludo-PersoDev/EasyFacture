@@ -327,16 +327,24 @@ if __name__ == "__main__":
     win_x = int((screen_width - win_width) / 2)
     win_y = int((screen_height - win_height) / 2)
 
-    webview.create_window(
-        "EasyFacture", 
-        loading_file_path, 
-        width=win_width, 
-        height=win_height, 
-        x=win_x, 
-        y=win_y,
-        min_size=(900, 600)
-    )
-    webview.start()
+    try:
+        webview.create_window(
+            "EasyFacture", 
+            loading_file_path, 
+            width=win_width, 
+            height=win_height, 
+            x=win_x, 
+            y=win_y,
+            min_size=(900, 600)
+        )
+        webview.start()
+    except Exception as e:
+        # Solution de secours ultime : si le webview natif plante, on ouvre l'app dans le navigateur par défaut
+        import webbrowser
+        webbrowser.open("http://localhost:9876")
+        # On garde le processus serveur actif
+        if server_process:
+            server_process.wait()
 
     if server_process:
         try:

@@ -238,124 +238,7 @@ def render_devis():
                 return
             confirmer_suppression(d['id'], d['numero_devis'])
 
-        # --- CONVERSION EN PRESTATION ---
-        def convertir_devis_en_prestation(devis_id, num_devis):
-            conn_tmp = database.get_conn()
-            try:
-                devis = conn_tmp.execute("SELECT * FROM devis WHERE id=?", (devis_id,)).fetchone()
-                items = conn_tmp.execute("SELECT * FROM devis_items WHERE devis_id=?", (devis_id,)).fetchall()
-            finally:
-                conn_tmp.close()
-
-            date_defaut = devis['date_prevue_execution'] if (devis and devis['date_prevue_execution']) else datetime.now().strftime("%Y-%m-%d")
-
-            dialog = ui.dialog()
-            with dialog, ui.card().classes("p-6 space-y-4 w-full max-w-md"):
-                ui.label(f"Convertir Devis {num_devis} en Prestation").classes("text-xl font-bold text-slate-800 border-b pb-2 w-full")
-                ui.label("Planifier l'intervention issue du devis :").classes("text-sm text-slate-600 font-medium")
-
-                date_exec_input = ui.input("Date d'exécution", value=date_defaut).props("dense outlined").classes("w-full")
-                with date_exec_input:
-                    with ui.menu() as menu_date:
-                        ui.date().bind_value(date_exec_input)
-                    with date_exec_input.add_slot('append'):
-                        ui.icon('event').classes('cursor-pointer').on('click', menu_date.open)
-
-                with ui.row().classes("w-full gap-4 items-center"):
-                    h_debut_input = ui.input("Début", value="14:00").props("dense outlined").classes("w-1/2")
-                    with h_debut_input:
-                        with ui.menu() as menu_h1:
-                            ui.time().props("format24h minute-step=5").bind_value(h_debut_input)
-                        with h_debut_input.add_slot('append'):
-                            ui.icon('schedule').classes('cursor-pointer').on('click', menu_h1.open)
-
-                    h_fin_input = ui.input("Fin", value="16:00").props("dense outlined").classes("w-1/2")
-                    with h_fin_input:
-                        with ui.menu() as menu_h2:
-                            ui.time().props("format24h minute-step=5").bind_value(h_fin_input)
-                        with h_fin_input.add_slot('append'):
-                            ui.icon('schedule').classes('cursor-pointer').on('click', menu_h2.open)
-
-                duree_label = ui.label("Durée calculée : 2.0 h").classes("w-full text-center text-sm font-semibold text-slate-700 bg-slate-100 py-2 rounded")
-
-                def maj_duree_val():
-                    try:
-                        t1 = datetime.strptime(h_debut_input.value, "%H:%M")
-                        t2 = datetime.strptime(h_fin_input.value, "%H:%M")
-                        diff = (t2 - t1).total_seconds() / 3600.0
-                        if diff < 0:
-                            diff += 24.0
-                        duree_label.set_text(f"Durée calculée : {round(diff, 2)} h")
-                    except Exception:
-                        duree_label.set_text("Durée calculée : 1.0 h")
-
-                h_debut_input.on_value_change(lambda _: maj_duree_val())
-                h_fin_input.on_value_change(lambda _: maj_duree_val())
-
-                def valider_acceptation():
-                    val_date = date_exec_input.value or date_defaut
-                    val_h_debut = h_debut_input.value or ""
-                    val_h_fin = h_fin_input.value or ""
-
-                    qte_calculee = 1.0
-                    try:
-                        t1 = datetime.strptime(val_h_debut, "%H:%M")
-                        t2 = datetime.strptime(val_h_fin, "%H:%M")
-                        diff = (t2 - t1).total_seconds() / 3600.0
-                        if diff < 0:
-                            diff += 24.0
-                        qte_calculee = round(diff, 2)
-                    except Exception:
-                        pass
-
-                    conn_inner = database.get_conn()
-                    try:
-                        cur_inner = conn_inner.cursor()
-                        cur_inner.execute("UPDATE devis SET statut='Accepté', date_prevue_execution=? WHERE id=?", (val_date, devis_id))
-                        num_interv = database.generer_numero_document("PREST")
-
-                        if items:
-                            for item in items:
-                                quantite_finale = qte_calculee if qte_calculee else item['quantite']
-                                cur_inner.execute("""
-                                    INSERT INTO interventions (
-                                        numero_intervention, client_id, prestation_id, devis_id, 
-                                        date, heure_debut, heure_fin, quantite, prix_final_ht, taux_tva, statut, commentaire
-                                    )
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                                """, (
-                                    num_interv, devis['client_id'], item['prestation_id'], devis_id, 
-                                    val_date, val_h_debut, val_h_fin, quantite_finale, 
-                                    item['prix_unitaire_ht'], item['taux_tva'], f"Générée depuis devis {num_devis}"
-                                ))
-                        else:
-                            cur_inner.execute("""
-                                INSERT INTO interventions (
-                                    numero_intervention, client_id, devis_id, 
-                                    date, heure_debut, heure_fin, quantite, prix_final_ht, statut, commentaire
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                            """, (
-                                num_interv, devis['client_id'], devis_id, 
-                                val_date, val_h_debut, val_h_fin, qte_calculee, 
-                                devis['total_ht'], f"Générée depuis devis {num_devis}"
-                            ))
-
-                        conn_inner.commit()
-                    finally:
-                        conn_inner.close()
-
-                    ui.notify(f"Devis {num_devis} ACCEPTÉ ! Prestation {num_interv} planifiée.", type="positive", icon="event_available")
-                    dialog.close()
-                    charger_donnees()
-
-                with ui.row().classes("w-full justify-end gap-2 mt-4"):
-                    ui.button("Annuler", on_click=dialog.close).props("flat color=slate")
-                    ui.button("Planifier la Prestation", icon="check", on_click=valider_acceptation).props("color=positive font-bold")
-
-            dialog.open()
-
-        # --- DIALOGUE CRÉATION / ÉDITION DEVIS ---
+        # --- DIALOGUE CRÉATION / ÉDITION DEVIS (RÉORGANISÉ) ---
         def ouvrir_dialogue_devis(devis_id=None):
             is_edit = devis_id is not None
             conn = database.get_conn()
@@ -382,64 +265,77 @@ def render_devis():
             statut_actuel = devis_data['statut'] if is_edit else "Brouillon"
 
             dialog = ui.dialog()
-            with dialog, ui.card().classes("w-full max-w-4xl p-6 space-y-4"):
+            # Modale très large (max-w-6xl) pour loger confortablement le bloc lignes/totaux à droite
+            with dialog, ui.card().classes("w-full max-w-6xl p-6 space-y-4"):
                 titre = f"Modifier Devis {devis_data['numero_devis']}" if is_edit else "Créer un Devis"
 
                 with ui.row().classes("w-full justify-between items-center border-b pb-2"):
                     ui.label(titre).classes("text-xl font-bold text-slate-800")
                     ui.badge(statut_actuel).props("color=blue outline font-bold").classes("text-sm p-2")
 
-                with ui.row().classes("w-full gap-4 items-center"):
-                    client_select = ui.select(
-                        options=clients_dict,
-                        value=devis_data['client_id'] if is_edit else list(clients_dict.keys())[0],
-                        label="Client *"
-                    ).classes("flex-1")
+                # --- STRUCTURE GLOBALE EN 2 COLONNES ---
+                with ui.row().classes("w-full gap-6 items-start"):
+                    
+                    # ================= COLONNE GAUCHE (Client + Dates + Remarques) =================
+                    with ui.column().classes("w-96 gap-4"):
+                        ui.label("Paramètres & Client").classes("text-xs font-bold text-slate-500 uppercase")
+                        
+                        client_select = ui.select(
+                            options=clients_dict,
+                            value=devis_data['client_id'] if is_edit else list(clients_dict.keys())[0],
+                            label="Client *"
+                        ).classes("w-full")
 
-                with ui.row().classes("w-full gap-4 items-center"):
-                    date_crea_val = devis_data['date_creation'] if is_edit else datetime.now().strftime("%Y-%m-%d")
-                    date_crea = ui.input("Date d'émission", value=date_crea_val).props("readonly dense outlined").classes("w-36 bg-slate-50")
+                        with ui.row().classes("w-full gap-2"):
+                            date_crea_val = devis_data['date_creation'] if is_edit else datetime.now().strftime("%Y-%m-%d")
+                            date_crea = ui.input("Date d'émission", value=date_crea_val).props("readonly dense outlined").classes("flex-1 bg-slate-50")
 
-                    duree_options = {15: "15 jours", 30: "1 mois", 60: "2 mois", 90: "3 mois"}
-                    duree_select = ui.select(options=duree_options, value=30, label="Validité").props("dense outlined").classes("w-32")
+                            duree_options = {15: "15 jours", 30: "1 mois", 60: "2 mois", 90: "3 mois"}
+                            duree_select = ui.select(options=duree_options, value=30, label="Validité").props("dense outlined").classes("w-28")
 
-                    date_val_defaut = devis_data['date_validite'] if is_edit else (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-                    date_val = ui.input("Date d'échéance", value=date_val_defaut).props("readonly dense outlined").classes("w-36 bg-slate-50")
+                        with ui.row().classes("w-full gap-2"):
+                            date_val_defaut = devis_data['date_validite'] if is_edit else (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+                            date_val = ui.input("Date d'échéance", value=date_val_defaut).props("readonly dense outlined").classes("flex-1 bg-slate-50")
 
-                    def recalculer_echeance(e):
-                        try:
-                            dt_crea = datetime.strptime(date_crea.value, "%Y-%m-%d")
-                            dt_val = dt_crea + timedelta(days=int(e.value))
-                            date_val.value = dt_val.strftime("%Y-%m-%d")
-                        except Exception:
-                            pass
+                            date_exec_val = devis_data['date_prevue_execution'] if is_edit else ""
+                            date_exec = ui.input("Exécution prévue", value=date_exec_val).props("dense outlined").classes("flex-1")
+                            with date_exec:
+                                with ui.menu() as menu_cal:
+                                    ui.date().bind_value(date_exec)
+                                with date_exec.add_slot('append'):
+                                    ui.icon('event').classes('cursor-pointer').on('click', menu_cal.open)
 
-                    duree_select.on_value_change(recalculer_echeance)
+                        def recalculer_echeance(e):
+                            try:
+                                dt_crea = datetime.strptime(date_crea.value, "%Y-%m-%d")
+                                dt_val = dt_crea + timedelta(days=int(e.value))
+                                date_val.value = dt_val.strftime("%Y-%m-%d")
+                            except Exception:
+                                pass
 
-                    date_exec_val = devis_data['date_prevue_execution'] if is_edit else ""
-                    date_exec = ui.input("Date d'exécution prévue", value=date_exec_val).props("dense outlined").classes("flex-1")
-                    with date_exec:
-                        with ui.menu() as menu_cal:
-                            ui.date().bind_value(date_exec)
-                        with date_exec.add_slot('append'):
-                            ui.icon('event').classes('cursor-pointer').on('click', menu_cal.open)
+                        duree_select.on_value_change(recalculer_echeance)
+                        remarque_in = ui.textarea("Remarques / Conditions particulières", value=devis_data['remarque'] if is_edit else "").classes("w-full mt-2")
 
-                ui.label("Lignes du Devis").classes("text-md font-bold text-slate-700 mt-4")
-                lignes_container = ui.column().classes("w-full space-y-2")
-                lignes_state = []
+                    # ================= COLONNE DROITE (Lignes devis + Totaux) =================
+                    with ui.column().classes("flex-1 gap-4"):
+                        ui.label("Lignes du Devis & Totaux").classes("text-xs font-bold text-slate-500 uppercase")
+                        
+                        lignes_container = ui.column().classes("w-full space-y-2 max-h-72 overflow-y-auto pr-1")
+                        lignes_state = []
 
-                with ui.row().classes("w-full justify-end items-center gap-6 p-4 bg-slate-100 rounded-xl mt-4"):
-                    with ui.column().classes("items-end gap-0"):
-                        ui.label("Total HT :").classes("text-xs text-slate-500 uppercase font-bold")
-                        lbl_total_ht = ui.label("0.00 €").classes("font-bold text-lg text-slate-800")
+                        # Bloc des totaux intégré en bas de la colonne de droite
+                        with ui.row().classes("w-full justify-between items-center p-4 bg-slate-50 border border-slate-200 rounded-xl mt-2"):
+                            with ui.column().classes("gap-0"):
+                                ui.label("Total HT :").classes("text-xs text-slate-500 uppercase font-bold")
+                                lbl_total_ht = ui.label("0.00 €").classes("font-bold text-base text-slate-800")
 
-                    with ui.column().classes("items-end gap-0"):
-                        ui.label("Total TVA :").classes("text-xs text-slate-500 uppercase font-bold")
-                        lbl_total_tva = ui.label("0.00 €").classes("text-sm text-slate-600")
+                            with ui.column().classes("gap-0"):
+                                ui.label("Total TVA :").classes("text-xs text-slate-500 uppercase font-bold")
+                                lbl_total_tva = ui.label("0.00 €").classes("text-sm text-slate-600")
 
-                    with ui.column().classes("items-end gap-0"):
-                        ui.label("Total TTC :").classes("text-xs text-slate-500 uppercase font-bold")
-                        lbl_total_ttc = ui.label("0.00 €").classes("font-bold text-xl text-primary")
+                            with ui.column().classes("gap-0 items-end"):
+                                ui.label("Total TTC :").classes("text-xs text-slate-500 uppercase font-bold")
+                                lbl_total_ttc = ui.label("0.00 €").classes("font-extrabold text-xl text-primary")
 
                 def calculer_totaux():
                     tot_ht = 0.0
@@ -497,26 +393,26 @@ def render_devis():
                                 options=p_options,
                                 value=item_initial['prestation_id'] if item_initial else prestations[0]['id'],
                                 label="Prestation"
-                            ).classes("flex-1")
+                            ).classes("flex-1").props("dense outlined")
 
                             qte_in = ui.number(
                                 label="Qté",
                                 value=item_initial['quantite'] if item_initial else 1.0,
                                 format="%.2f"
-                            ).classes("w-20")
+                            ).classes("w-20").props("dense outlined")
 
                             pu_in = ui.number(
                                 label="Prix HT (€)",
                                 value=item_initial['prix_unitaire_ht'] if item_initial else prestations[0]['prix_effectif'],
                                 format="%.2f"
-                            ).classes("w-28")
+                            ).classes("w-28").props("dense outlined")
 
                             valeur_tva_init = 0.0 if is_exo else (item_initial['taux_tva'] if item_initial else prestations[0]['taux_tva'])
                             tva_in = ui.select(
                                 options={0.0: "0%", 5.5: "5.5%", 10.0: "10%", 20.0: "20%"},
                                 value=valeur_tva_init,
                                 label="TVA"
-                            ).classes("w-24")
+                            ).classes("w-24").props("dense outlined")
 
                             if is_exo:
                                 tva_in.props("disable")
@@ -553,15 +449,13 @@ def render_devis():
 
                 client_select.on_value_change(on_client_change)
 
-                ui.button("Ajouter une prestation", icon="add", on_click=lambda: ajouter_ligne()).props("color=emerald outline").classes("mt-2")
+                ui.button("Ajouter une prestation", icon="add", on_click=lambda: ajouter_ligne()).props("color=emerald outline dense").classes("mt-1")
 
                 if is_edit and items_data:
                     for item in items_data:
                         ajouter_ligne(item)
                 else:
                     ajouter_ligne()
-
-                remarque_in = ui.textarea("Remarques / Conditions particulières", value=devis_data['remarque'] if is_edit else "").classes("w-full mt-4")
 
                 def sauvegarder():
                     if not lignes_state:
@@ -633,7 +527,7 @@ def render_devis():
                     dialog.close()
                     charger_donnees()
 
-                with ui.row().classes("w-full justify-end gap-2 mt-6"):
+                with ui.row().classes("w-full justify-end gap-2 mt-4 pt-2 border-t"):
                     ui.button("Annuler", on_click=dialog.close).props("flat color=slate")
                     ui.button("Enregistrer le devis", icon="check", on_click=sauvegarder).props("color=primary font-bold")
 

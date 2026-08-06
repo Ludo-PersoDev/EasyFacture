@@ -67,13 +67,11 @@ def render_clients():
                 if not clients:
                     ui.label("Aucun client enregistré pour le moment.").classes("text-slate-400 italic py-4")
                 else:
-                    # Ajout de la classe custom 'no-checkbox-table' pour masquer la checkbox en CSS
                     grid = ui.table(columns=columns, rows=clients, row_key='id', selection='single', pagination=10).classes("w-full cursor-pointer no-checkbox-table")
                     grid.props('flat borderless hide-selection-color')
 
                     search_input.on_value_change(lambda e: grid.set_filter(e.value))
 
-                    # 1. Badge Type Client
                     grid.add_slot('body-cell-type_client', '''
                         <q-td :props="props">
                             <q-chip dense 
@@ -85,7 +83,6 @@ def render_clients():
                         </q-td>
                     ''')
 
-                    # 2. Nom & Email Contact
                     grid.add_slot('body-cell-contact_nom', '''
                         <q-td :props="props">
                             <div class="font-medium text-slate-800">{{ props.row.contact_nom }}</div>
@@ -95,7 +92,6 @@ def render_clients():
                         </q-td>
                     ''')
 
-                    # 3. Multisite Chip
                     grid.add_slot('body-cell-multisite_txt', '''
                         <q-td :props="props">
                             <q-chip dense
@@ -107,7 +103,6 @@ def render_clients():
                         </q-td>
                     ''')
 
-                    # 4. Récap Auto Chip
                     grid.add_slot('body-cell-recap_txt', '''
                         <q-td :props="props">
                             <q-chip dense 
@@ -119,7 +114,6 @@ def render_clients():
                         </q-td>
                     ''')
 
-                    # --- BARRE D'ACTIONS SOUS LE TABLEAU ---
                     actions_bar = ui.row().classes("w-full justify-between items-center p-4 bg-slate-50 border border-slate-200 rounded-xl mt-4 transition-all")
                     actions_bar.set_visibility(False)
 
@@ -133,24 +127,19 @@ def render_clients():
                             
                             buttons_container.clear()
                             with buttons_container:
-                                # Bouton Explorateur de PDF corrigé (avec une seule icône loupe)
                                 ui.button("Chercher PDF", icon="search", 
                                           on_click=lambda: ouvrir_explorateur_pdf_client(client_sel['nom_societe'])).props("outline color=cyan-9 dense")
 
-                                # Bouton Sites (uniquement si multisite)
                                 if client_sel.get('multi_etab'):
                                     ui.button("Établissements / Sites", icon="business", 
                                               on_click=lambda: ouvrir_dialogue_sites(client_sel)).props("outline color=amber-9 dense")
 
-                                # Bouton Catalogue & Tarifs
                                 ui.button("Tarifs & Prestations", icon="sell", 
                                           on_click=lambda: ouvrir_dialogue_tarifs(client_sel)).props("outline color=teal dense")
 
-                                # Bouton Modifier
                                 ui.button("Modifier", icon="edit", 
                                           on_click=lambda: ouvrir_dialogue_client(client_sel)).props("color=primary dense")
 
-                                # Bouton Supprimer
                                 ui.button("Supprimer", icon="delete", 
                                           on_click=lambda: confirmer_suppression(client_sel['id'], client_sel['nom_societe'])).props("color=negative dense")
 
@@ -158,7 +147,6 @@ def render_clients():
                         else:
                             actions_bar.set_visibility(False)
 
-                    # Sélection directe au clic sur la ligne
                     def on_row_click(e):
                         client_row = e.args[1]
                         grid.selected.clear()
@@ -171,12 +159,12 @@ def render_clients():
                         label_selection
                         buttons_container
 
-        # --- MODALE EXPLORATEUR DE PDF INTÉGRÉ (SANS SORTIR DE L'APP) ---
+        # --- MODALE EXPLORATEUR DE PDF INTÉGRÉ (ÉLARGIE À 80%) ---
         def ouvrir_explorateur_pdf_client(client_nom: str):
             dossier_export_base = os.path.join(os.getcwd(), "Export")
             dossier_client = os.path.join(dossier_export_base, client_nom)
             
-            with ui.dialog() as dialog, ui.card().classes('w-[850px] p-6'):
+            with ui.dialog() as dialog, ui.card().classes('w-[85%] max-w-[1200px] p-6'):
                 ui.label(f'Documents - {client_nom}').classes('text-xl font-bold text-slate-800 mb-4')
                 
                 types_disponibles = []
@@ -319,7 +307,6 @@ def render_clients():
 
                 charger_fichiers()
 
-                # --- BOUTON D'ACTION INTÉGRÉ ---
                 with ui.row().classes('w-full justify-end items-center mt-4 gap-2'):
                     def visualiser_pdf_interne():
                         path = selected_pdf["path"]
@@ -328,11 +315,12 @@ def render_clients():
                             rel_path = os.path.relpath(path, dossier_export).replace('\\', '/')
                             pdf_url = f"/pdf/{rel_path}"
 
-                            with ui.dialog() as viewer_dialog, ui.card().classes('w-[900px] h-[80vh] p-4 flex flex-col'):
+                            with ui.dialog() as viewer_dialog, ui.card().classes('w-[80vw] !max-w-[80vw] h-[85vh] p-4 flex flex-col'):
                                 with ui.row().classes('w-full justify-between items-center mb-2'):
-                                    ui.label(selected_pdf["name"]).classes('font-bold text-slate-700 text-sm')
+                                    ui.label(selected_pdf["name"]).classes('font-bold text-slate-700 text-base')
                                     ui.button(icon="close", on_click=viewer_dialog.close).props('flat dense')
                                 
+                                # L'iframe prend tout l'espace restant de la carte
                                 ui.element('iframe').props(f'src="{pdf_url}"').classes('w-full flex-grow border-0 rounded-lg')
                             viewer_dialog.open()
                         else:
@@ -343,64 +331,91 @@ def render_clients():
 
             dialog.open()
 
-        # --- MODALE CRÉATION / ÉDITION CLIENT ---
+        # --- MODALE CRÉATION / ÉDITION CLIENT (2 COLONNES & CHAMPS PRO GRISÉS) ---
         def ouvrir_dialogue_client(client=None):
             is_edit = client is not None
             titre = "Modifier le client" if is_edit else "Nouveau client"
 
-            with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 space-y-4"):
+            with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl p-6 space-y-4"):
                 ui.label(titre).classes("text-xl font-bold text-slate-800 border-b pb-2")
 
-                is_particulier_check = ui.checkbox("Client Particulier (Masquer identifiants professionnels)", value=bool(client['est_particulier']) if is_edit else False)
+                is_particulier_check = ui.checkbox("Client Particulier", value=bool(client['est_particulier']) if is_edit else False)
 
-                nom_in = ui.input("Nom de la Société / Nom Complet *", value=client['nom_societe'] if is_edit else "").classes("w-full")
-                contact_in = ui.input("Nom du Contact Référent", value=client['contact'] if is_edit else "").classes("w-full")
-
-                with ui.row().classes("w-full gap-4"):
-                    email_in = ui.input("Email", value=client['email'] if is_edit else "").classes("w-1/2")
-                    tel_in = ui.input("Téléphone", value=client['telephone'] if is_edit else "").classes("w-1/2")
-
-                adresse_in = ui.input("Adresse", value=client['adresse'] if is_edit else "").classes("w-full")
-                with ui.row().classes("w-full gap-4"):
-                    cp_in = ui.input("Code Postal", value=client['cp'] if is_edit else "").classes("w-1/3")
-                    ville_in = ui.input("Ville", value=client['ville'] if is_edit else "").classes("w-2/3")
-
-                pro_container = ui.column().classes("w-full p-4 bg-slate-50 border rounded-xl gap-4")
-                with pro_container:
-                    ui.label("Informations Professionnelles").classes("text-xs font-bold text-slate-500 uppercase")
-                    with ui.row().classes("w-full gap-4"):
-                        siret_in = ui.input("SIRET", value=client['siret'] if is_edit else "").classes("flex-1")
-                        tva_in = ui.input("N° TVA Intracommunautaire", value=client['tva_intra'] if is_edit else "").classes("flex-1")
-                    with ui.row().classes("w-full gap-4"):
-                        rcs_in = ui.input("RCS / RM", value=client['rcs'] if is_edit else "").classes("flex-1")
-                        ape_in = ui.input("APE / NAF", value=client['ape'] if is_edit else "").classes("flex-1")
-
-                options_container = ui.column().classes("w-full gap-2")
-                with options_container:
-                    ui.label("Options de facturation & Gestion").classes("text-sm font-bold text-slate-700 mt-2")
-                    sans_tva_check = ui.checkbox("Exonérer ce client de TVA (Facturation HT)", value=bool(client['sans_tva']) if is_edit else False)
-                    recap_check = ui.checkbox("Générer automatiquement le PDF Récapitulatif de prestation", value=bool(client['recap_interventions']) if is_edit else False)
-                    multi_check = ui.checkbox("Client Multisite (Gestion de plusieurs établissements)", value=bool(client['multi_etab']) if is_edit else False)
+                with ui.row().classes("w-full gap-6 items-start"):
                     
-                    ui.label("Modèle de facture à utiliser :").classes("text-xs font-bold text-slate-500 mt-2")
-                    valeur_modele_actuelle = client.get('modele_facture', 'condense') if is_edit else 'condense'
-                    modele_facture_select = ui.select(
-                        options={
-                            'condense': 'Facture condensée (Regroupée par prestation)',
-                            'detaille': 'Facture détaillée (Ligne par ligne / intervention)'
-                        },
-                        value=valeur_modele_actuelle
-                    ).classes("w-full").props('dense outlined')
+                    # Colonne Gauche
+                    with ui.column().classes("flex-1 gap-4"):
+                        ui.label("Coordonnées générales").classes("text-xs font-bold text-slate-500 uppercase")
+                        
+                        nom_in = ui.input("Nom de la Société / Nom Complet *", value=client['nom_societe'] if is_edit else "").classes("w-full")
+                        contact_in = ui.input("Nom du Contact Référent", value=client['contact'] if is_edit else "").classes("w-full")
+
+                        with ui.row().classes("w-full gap-2"):
+                            email_in = ui.input("Email", value=client['email'] if is_edit else "").classes("flex-1")
+                            tel_in = ui.input("Téléphone", value=client['telephone'] if is_edit else "").classes("flex-1")
+
+                        adresse_in = ui.input("Adresse", value=client['adresse'] if is_edit else "").classes("w-full")
+                        with ui.row().classes("w-full gap-2"):
+                            cp_in = ui.input("Code Postal", value=client['cp'] if is_edit else "").classes("w-1/3")
+                            ville_in = ui.input("Ville", value=client['ville'] if is_edit else "").classes("w-2/3")
+
+                    # Colonne Droite
+                    with ui.column().classes("flex-1 gap-4"):
+                        
+                        pro_container = ui.column().classes("w-full p-4 bg-slate-50 border rounded-xl gap-3 transition-all")
+                        with pro_container:
+                            ui.label("Informations Professionnelles").classes("text-xs font-bold text-slate-500 uppercase")
+                            
+                            with ui.row().classes("w-full gap-2"):
+                                siret_in = ui.input("SIRET", value=client['siret'] if is_edit else "").classes("flex-1")
+                                tva_in = ui.input("N° TVA Intracom", value=client['tva_intra'] if is_edit else "").classes("flex-1")
+                            with ui.row().classes("w-full gap-2"):
+                                rcs_in = ui.input("RCS / RM", value=client['rcs'] if is_edit else "").classes("flex-1")
+                                ape_in = ui.input("APE / NAF", value=client['ape'] if is_edit else "").classes("flex-1")
+
+                        options_container = ui.column().classes("w-full p-4 bg-slate-50 border rounded-xl gap-2 transition-all")
+                        with options_container:
+                            ui.label("Options de facturation & Gestion").classes("text-xs font-bold text-slate-500 uppercase")
+                            
+                            sans_tva_check = ui.checkbox("Exonérer ce client de TVA (Facturation HT)", value=bool(client['sans_tva']) if is_edit else False)
+                            recap_check = ui.checkbox("Générer auto. le PDF Récapitulatif", value=bool(client['recap_interventions']) if is_edit else False)
+                            multi_check = ui.checkbox("Client Multisite (Gestion d'établissements)", value=bool(client['multi_etab']) if is_edit else False)
+                            
+                            ui.label("Modèle de facture :").classes("text-xs font-bold text-slate-500 mt-2")
+                            valeur_modele_actuelle = client.get('modele_facture', 'condense') if is_edit else 'condense'
+                            modele_facture_select = ui.select(
+                                options={
+                                    'condense': 'Facture condensée (Regroupée)',
+                                    'detaille': 'Facture détaillée (Ligne par ligne)'
+                                },
+                                value=valeur_modele_actuelle
+                            ).classes("w-full").props('dense outlined')
 
                 def toggle_type_client():
                     if is_particulier_check.value:
                         adresse_in.set_label("Adresse")
-                        pro_container.set_visibility(False)
-                        options_container.set_visibility(False)
+                        pro_container.classes(add="opacity-40 pointer-events-none")
+                        options_container.classes(add="opacity-40 pointer-events-none")
+                        siret_in.disable()
+                        tva_in.disable()
+                        rcs_in.disable()
+                        ape_in.disable()
+                        sans_tva_check.disable()
+                        recap_check.disable()
+                        multi_check.disable()
+                        modele_facture_select.disable()
                     else:
                         adresse_in.set_label("Adresse Siège")
-                        pro_container.set_visibility(True)
-                        options_container.set_visibility(True)
+                        pro_container.classes(remove="opacity-40 pointer-events-none")
+                        options_container.classes(remove="opacity-40 pointer-events-none")
+                        siret_in.enable()
+                        tva_in.enable()
+                        rcs_in.enable()
+                        ape_in.enable()
+                        sans_tva_check.enable()
+                        recap_check.enable()
+                        multi_check.enable()
+                        modele_facture_select.enable()
 
                 is_particulier_check.on_value_change(toggle_type_client)
                 toggle_type_client()
@@ -475,7 +490,7 @@ def render_clients():
 
             dialog.open()
 
-        # --- MODALE GESTION DES SITES (MULTISITE AVEC ÉDITION) ---
+        # --- MODALE GESTION DES SITES (MULTISITE) ---
         def ouvrir_dialogue_sites(client):
             with ui.dialog() as dialog, ui.card().classes("w-full max-w-xl p-6 space-y-4"):
                 ui.label(f"Sites / Établissements : {client['nom_societe']}").classes("text-xl font-bold text-slate-800 border-b pb-2")
@@ -563,7 +578,7 @@ def render_clients():
 
             dialog.open()
 
-        # --- MODALE TARIFS SPÉCIFIQUES & ACTIVATION DES PRESTATIONS ---
+        # --- MODALE TARIFS SPÉCIFIQUES ---
         def ouvrir_dialogue_tarifs(client):
             with ui.dialog() as dialog, ui.card().classes("w-full max-w-2xl p-6 space-y-4"):
                 ui.label(f"Catalogue & Tarifs client : {client['nom_societe']}").classes("text-lg font-bold text-slate-800 border-b pb-2")

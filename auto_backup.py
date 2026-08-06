@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import os
+import re
 import sqlite3
 import zipfile
 from database import get_backup_path
@@ -20,11 +21,9 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 def get_drive_service():
   """Authentifie et retourne le service Google Drive via le token OAuth personnel."""
   creds = None
-  # Le token.json stocke tes identifiants de connexion persistants
   if os.path.exists('token.json'):
     creds = Credentials.from_authorized_user_file('token.json', SCOPES)
 
-  # Si le token est expiré ou inexistant, on rafraîchit ou on se connecte
   if not creds or not creds.valid:
     if creds and creds.expired and creds.refresh_token:
       creds.refresh(Request())
@@ -38,35 +37,40 @@ def get_drive_service():
       )
       creds = flow.run_local_server(port=0)
 
-    # Sauvegarde du token pour les prochaines utilisations
     with open('token.json', 'w') as token:
       token.write(creds.to_json())
 
   return build('drive', 'v3', credentials=creds)
 
 
-def get_company_name():
-  """Récupère le nom de l'entreprise depuis la base de données locale."""
+def nettoyer_siret(siret_brut: str) -> str:
+  """Nettoie le SIRET pour ne garder que les 14 chiffres stricts."""
+  if not siret_brut:
+    return ""
+  return re.sub(r'\D', '', str(siret_brut))
+
+
+def get_company_siret():
+  """Récupère et nettoie le SIRET depuis la base de données locale."""
   try:
     if not os.path.exists(DB_FILENAME):
-      return 'EasyFacture_Default'
+      return ""
     conn = sqlite3.connect(DB_FILENAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    row = cursor.execute('SELECT nom_entreprise FROM parametres WHERE id = 1').fetchone()
+    row = cursor.execute('SELECT siret FROM parametres WHERE id = 1').fetchone()
     conn.close()
-    if row and row['nom_entreprise']:
-      nom = ''.join(
-          c for c in row['nom_entreprise'] if c.isalnum() or c in (' ', '_', '-')
-      ).strip()
-      return nom.replace(' ', '_')
+    if row and row['siret']:
+      siret_propre = nettoyer_siret(row['siret'])
+      if len(siret_propre) == 14:
+        return siret_propre
   except Exception:
     pass
-  return 'MonEntreprise'
+  return ""
 
 
 def get_or_create_drive_subfolder(service, parent_id, folder_name):
-  """Vérifie si le sous-dossier de la société existe sur ton Drive, sinon le crée."""
+  """Vérifie si le sous-dossier du SIRET existe sur ton Drive, sinon le crée."""
   query = (
       f"'{parent_id}' in parents and name = '{folder_name}' and mimeType ="
       " 'application/vnd.google-apps.folder' and trashed = false"
@@ -85,7 +89,7 @@ def get_or_create_drive_subfolder(service, parent_id, folder_name):
         'parents': [parent_id],
     }
     folder = service.files().create(body=folder_metadata, fields='id').execute()
-    print(f'[Backup Auto] Sous-dossier Drive créé pour : {folder_name}')
+    print(f'[Backup Auto] Sous-dossier Drive créé pour le SIRET : {folder_name}')
     return folder['id']
 
 
@@ -121,15 +125,18 @@ def cleanup_old_drive_files(service, folder_id):
 
 
 def upload_to_google_drive(file_path):
-  """Envoie le ZIP dans le sous-dossier de l'entreprise sur ton Google Drive."""
+  """Envoie le ZIP dans le sous-dossier du SIRET sur ton Google Drive."""
   print(f"[Backup Auto] Envoi de {file_path} sur ton Google Drive...")
 
   try:
-    service = get_drive_service()
-    company_name = get_company_name()
+    siret = get_company_siret()
+    if not siret or len(siret) != 14:
+      print("[Backup Auto Error] Annulation de l'envoi Drive : SIRET invalide ou manquant (14 chiffres requis).")
+      return
 
+    service = get_drive_service()
     subfolder_id = get_or_create_drive_subfolder(
-        service, GOOGLE_DRIVE_FOLDER_ID, company_name
+        service, GOOGLE_DRIVE_FOLDER_ID, siret
     )
 
     file_name = os.path.basename(file_path)
@@ -157,7 +164,7 @@ def upload_to_google_drive(file_path):
     ).execute()
     print(
         f"[Backup Auto] Fichier {file_name} envoyé avec succès dans ton dossier"
-        f' Drive ({company_name}).'
+        f' Drive (SIRET : {siret}).'
     )
 
     # 3. Nettoyage des fichiers de + de 8 jours
@@ -191,7 +198,7 @@ def lancer_sauvegarde_automatique():
             rel_path = os.path.relpath(full_path, '.')
             zipf.write(full_path, arcname=rel_path)
 
-    # Envoi sur ton Google Drive
+    # Envoi sur ton Google Drive (basé sur le SIRET)
     upload_to_google_drive(chemin_zip)
 
     # Rotation locale (garde les 8 plus récents)

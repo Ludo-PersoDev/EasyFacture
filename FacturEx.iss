@@ -2,7 +2,7 @@
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
-#define MyAppVersion "1.6"
+#define MyAppVersion "1.7"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 
@@ -45,6 +45,6 @@ Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"; Tasks: desktopicon
 
 [Run]
-; Installation automatique de toutes les dépendances Python requises pour la v1.6
+; Installation automatique de toutes les dépendances Python requises pour la v1.7
 Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client pywebview"; Flags: runminimized waituntilterminated
 Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

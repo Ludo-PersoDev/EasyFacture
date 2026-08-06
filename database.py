@@ -183,6 +183,17 @@ def initialiser_bdd():
         FOREIGN KEY(devis_id) REFERENCES devis(id) ON DELETE SET NULL,
         FOREIGN KEY(facture_id) REFERENCES factures(id) ON DELETE SET NULL
     )""")
+    
+  # Table de traçabilité des restaurations (Garde-fou)
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS restaurations_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date_restauration TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            nom TEXT NOT NULL,
+            prenom TEXT NOT NULL,
+            motif TEXT NOT NULL,
+            nom_fichier_restore TEXT NOT NULL
+        )""")
 
   # --- MIGRATIONS AUTOMATIQUES ---
   cursor.execute("PRAGMA table_info(parametres)")
@@ -236,7 +247,6 @@ def initialiser_bdd():
   os.makedirs("assets", exist_ok=True)
   chemin_logo = os.path.join("assets", "logo.png")
   if not os.path.exists(chemin_logo):
-    # Si tu as placé un logo initial de secours dans ton projet (ex: logo_initial.png)
     if os.path.exists("logo_initial.png"):
       shutil.copy("logo_initial.png", chemin_logo)
       print("✓ Logo par défaut initialisé dans assets/logo.png")

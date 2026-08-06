@@ -20,8 +20,15 @@ import database
 import re
 
 
+MOIS_FR = {
+    1: "janvier", 2: "février", 3: "mars", 4: "avril",
+    5: "mai", 6: "juin", 7: "juillet", 8: "août",
+    9: "septembre", 10: "octobre", 11: "novembre", 12: "décembre"
+}
+
+
 def format_date_fr(date_str):
-    """Convertit 'AAAA-MM-JJ' en 'JJ/MM/AAAA'."""
+    """Convertit 'AAAA-MM-JJ' en 'JJ/MM/AAAA'[cite: 4]."""
     if not date_str:
         return ""
     try:
@@ -32,7 +39,7 @@ def format_date_fr(date_str):
 
 
 def nettoyer_nom_dossier(nom):
-    """Supprime les caractères spéciaux non autorisés dans les noms de dossiers Windows."""
+    """Supprime les caractères spéciaux non autorisés dans les noms de dossiers Windows[cite: 4]."""
     if not nom:
         return "Client_Inconnu"
     nom_propre = re.sub(r"[\\/*?:\"<>|]", "_", str(nom).strip())
@@ -40,7 +47,7 @@ def nettoyer_nom_dossier(nom):
 
 
 def obtenir_chemin_export_facture(nom_client, numero_facture):
-    """Génère l'arborescence : Export/NomClient/Factures/FAC-2026-XXXX.pdf"""
+    """Génère l'arborescence : Export/NomClient/Factures/FAC-2026-XXXX.pdf[cite: 4]."""
     base_dir = os.getcwd()
     client_folder = nettoyer_nom_dossier(nom_client)
     export_dir = os.path.join(base_dir, "Export", client_folder, "Factures")
@@ -50,7 +57,7 @@ def obtenir_chemin_export_facture(nom_client, numero_facture):
 
 def obtenir_chemin_export_recap(nom_client, numero_facture=None):
     """
-    Garantit et retourne le chemin d'exportation pour le récapitulatif du client.
+    Garantit et retourne le chemin d'exportation pour le récapitulatif du client[cite: 4].
     """
     client_folder = nettoyer_nom_dossier(nom_client)
     dossier_base = os.path.join(os.getcwd(), "Export", client_folder, "Recaps")
@@ -67,7 +74,7 @@ def obtenir_chemin_export_recap(nom_client, numero_facture=None):
 def generer_pdf_facture(facture_id, output_path=None):
     """
     Aiguille vers la facture condensée ou détaillée selon le choix du client en base,
-    et génère automatiquement le récapitulatif si 'recap_interventions' est à 1.
+    et génère automatiquement le récapitulatif si 'recap_interventions' est à 1[cite: 4].
     """
     conn = database.get_conn()
     query = """
@@ -82,18 +89,15 @@ def generer_pdf_facture(facture_id, output_path=None):
     if not res:
         raise ValueError(f"Facture ID {facture_id} introuvable.")
 
-    # Convertir en dictionnaire pour un accès sécurisé selon le type de row_factory
     res_dict = dict(res)
     modele = res_dict.get('modele_facture', 'condense')
     recap_auto = res_dict.get('recap_interventions', 0)
 
-    # 1. Génération de la facture principale selon le modèle choisi
     if modele == 'detaille':
         pdf_path = generer_pdf_facture_detaillee(facture_id, output_path)
     else:
         pdf_path = generer_pdf_facture_condensee(facture_id, output_path)
 
-    # 2. Génération automatique du récapitulatif si demandé par le client (recap_interventions == 1)
     if recap_auto == 1:
         try:
             generer_pdf_recap_facture(facture_id)
@@ -104,7 +108,7 @@ def generer_pdf_facture(facture_id, output_path=None):
 
 
 def generer_pdf_facture_condensee(facture_id, output_path=None):
-    """Génère le document PDF d'une facture condensée par prestation et l'enregistre."""
+    """Génère le document PDF d'une facture condensée par prestation et l'enregistre[cite: 4]."""
     conn = database.get_conn()
 
     query_facture = """
@@ -209,7 +213,6 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
 
     elements = []
 
-    # En-tête entreprise
     header_elements = []
     logo_path_bdd = params.get("logo_path", "")
     if logo_path_bdd:
@@ -265,7 +268,6 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
         )
     )
 
-    # Client
     client_text = f"""
     <font size="9" color="{COLOR_PRIMARY.hexval()}"><b>DESTINATAIRE :</b></font><br/><br/>
     <font size="11" color="#0f172a"><b>{facture_dict['nom_societe']}</b></font><br/>
@@ -296,7 +298,6 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
     elements.append(dest_row)
     elements.append(Spacer(1, 1.2 * cm))
 
-    # Regroupement intelligent des items par désignation + prix unitaire
     items_groupes = {}
     for it in items:
         i_dict = dict(it)
@@ -412,7 +413,7 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
 
 
 def generer_pdf_facture_detaillee(facture_id, output_path=None):
-    """Génère le document PDF d'une facture détaillée (ligne par ligne par intervention) et l'enregistre."""
+    """Génère le document PDF d'une facture détaillée (ligne par ligne par intervention) et l'enregistre[cite: 4]."""
     conn = database.get_conn()
 
     query_facture = """
@@ -518,7 +519,6 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
 
     elements = []
 
-    # En-tête entreprise
     header_elements = []
     logo_path_bdd = params.get("logo_path", "")
     if logo_path_bdd:
@@ -574,7 +574,6 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
         )
     )
 
-    # Client
     client_text = f"""
     <font size="9" color="{COLOR_PRIMARY.hexval()}"><b>DESTINATAIRE :</b></font><br/><br/>
     <font size="11" color="#0f172a"><b>{facture_dict['nom_societe']}</b></font><br/>
@@ -605,7 +604,6 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
     elements.append(dest_row)
     elements.append(Spacer(1, 1.2 * cm))
 
-    # Tableau prestations (Version détaillée ligne par ligne)
     table_data = [
         [
             Paragraph("<b>Date / Site / Prestation</b>", style_th),
@@ -811,7 +809,15 @@ def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Interventi
             dt = datetime.strptime(str(it["date"]).strip(), "%Y-%m-%d")
             debut_sem = dt - timedelta(days=dt.weekday())
             fin_sem = debut_sem + timedelta(days=6)
-            sem_key = f"Semaine du {debut_sem.strftime('%d/%m')} au {fin_sem.strftime('%d/%m')}"
+            
+            # Utilisation du dictionnaire français pour les mois
+            m_debut = MOIS_FR[debut_sem.month]
+            m_fin = MOIS_FR[fin_sem.month]
+            
+            if debut_sem.month == fin_sem.month:
+                sem_key = f"Semaine du {debut_sem.strftime('%d')} au {fin_sem.strftime('%d')} {m_fin}"
+            else:
+                sem_key = f"Semaine du {debut_sem.strftime('%d')} {m_debut} au {fin_sem.strftime('%d')} {m_fin}"
 
             if sem_key not in semaines_dict:
                 semaines_dict[sem_key] = []
@@ -858,11 +864,9 @@ def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Interventi
             total_general_mois += total_semaine
             total_general_nombre += nombre_semaine
 
-            # Ligne total semaine avec montant + nombre de prestations
             row.append(Paragraph(f"<b>{total_semaine:.0f} €</b><br/><font size='7' color='#64748b'>({nombre_semaine} {intitule})</font>", style_cell_center))
             table_data.append(row)
 
-        # Ligne total mois
         total_row = [Paragraph("<b>TOTAL MOIS</b>", style_th)]
         for etab in etabs_list:
             total_row.append(Paragraph("-", style_th))
