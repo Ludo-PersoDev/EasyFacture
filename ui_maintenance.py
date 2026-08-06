@@ -10,6 +10,7 @@ from nicegui import ui
 import version
 import subprocess
 import sys
+import io
 
 # Import du module Google Drive
 try:
@@ -89,6 +90,7 @@ def render_maintenance():
             tab_sauvegarde = ui.tab("Sauvegarde", icon="cloud_upload")
             tab_restau_locale = ui.tab("Restauration Locale", icon="settings_backup_restore")
             tab_restau_distante = ui.tab("Restauration Cloud (Drive)", icon="history_edu")
+            tab_audit = ui.tab("Journal d'Audit", icon="verified_user")
 
         with ui.tab_panels(tabs, value=tab_sauvegarde).classes("w-full pt-4"):
             
@@ -124,7 +126,6 @@ def render_maintenance():
 
                             ui.notify("Sauvegarde locale créée avec succès !", type="positive")
                             
-                            # Poussée automatique vers le Drive dans le dossier du SIRET
                             if gdrive_backup:
                                 try:
                                     gdrive_backup.pousser_sauvegarde_vers_drive(zip_filename, siret_propre)
@@ -142,31 +143,109 @@ def render_maintenance():
                         on_click=executer_sauvegarde_complete,
                     ).props("color=primary font-bold")
 
-            # --- PANNEAU RESTAURATION LOCALE ---
+            # --- PANNEAU RESTAURATION LOCALE (AVEC GARDE-FOU) ---
             with ui.tab_panel(tab_restau_locale):
                 with ui.column().classes("gap-4 w-full"):
                     ui.label("Remplacer vos données actuelles à partir d'un fichier .zip stocké sur votre machine.").classes("text-sm text-slate-600")
                     
-                    def restaurer_sauvegarde_locale(e):
-                        try:
-                            with zipfile.ZipFile(e.content, "r") as zip_ref:
-                                zip_ref.extractall(".")
+                    def ouvrir_modal_gardefou_local(e):
+                        filename = getattr(e.file, 'name', 'Fichier local .zip')
+                        
+                        with ui.dialog() as dialog, ui.card().classes("w-[450px] p-6 space-y-4"):
+                            ui.label("⚠️ Sécurité & Traçabilité - Restauration Locale").classes("text-lg font-bold text-amber-600")
+                            ui.label(f"Vous vous apprêtez à restaurer le fichier : {filename}.\nCette action va écraser les données actuelles.").classes("text-xs text-slate-600")
+                            
+                            input_nom = ui.input("Nom de l'intervenant").classes("w-full").props("outlined dense required")
+                            input_prenom = ui.input("Prénom de l'intervenant").classes("w-full").props("outlined dense required")
+                            input_motif = ui.textarea("Motif de la restauration (ex: Maintenance, bascule de poste...)").classes("w-full").props("outlined dense required")
 
-                            ui.notify(
-                                "Restauration réussie ! Rechargez la page.",
-                                type="positive",
-                                close_button="Recharger",
-                                on_dismiss=lambda: ui.navigate.reload(),
-                            )
-                        except Exception as err:
-                            ui.notify(
-                                f"Erreur lors de la restauration : {str(err)}", type="negative"
-                            )
+                            async def valider_et_restaurer_local():
+                                if not input_nom.value or not input_prenom.value or not input_motif.value:
+                                    ui.notify("Veuillez remplir tous les champs (Nom, Prénom, Motif).", type="warning")
+                                    return
+
+                                dialog.close()
+                                try:
+                                    donnees_binaires = await e.file.read()
+                                    contenu_flux = io.BytesIO(donnees_binaires)
+                                    
+                                    with zipfile.ZipFile(contenu_flux, "r") as zip_ref:
+                                        zip_ref.extractall(".")
+
+                                    # Traçabilité et indexation des compteurs post-restauration
+                                    conn = database.get_conn()
+                                    cursor = conn.cursor()
+                                    
+                                    dernier_devis = "N/A"
+                                    dernier_facture = "N/A"
+                                    derniere_intervention = "N/A"
+                                    try:
+                                        dernier_devis = cursor.execute("SELECT numero_devis FROM devis ORDER BY id DESC LIMIT 1").fetchone()[0] or "Aucun"
+                                    except Exception:
+                                        pass
+                                    try:
+                                        dernier_facture = cursor.execute("SELECT numero_facture FROM factures ORDER BY id DESC LIMIT 1").fetchone()[0] or "Aucune"
+                                    except Exception:
+                                        pass
+                                    try:
+                                        derniere_intervention = cursor.execute("SELECT numero_intervention FROM interventions ORDER BY id DESC LIMIT 1").fetchone()[0] or "Aucune"
+                                    except Exception:
+                                        pass
+
+                                    motif_complet = f"{input_motif.value} [Dernier Devis: {dernier_devis} | Dernière Facture: {dernier_facture} | Dernière Interv: {derniere_intervention}]"
+
+                                    conn.execute("""
+                                        INSERT INTO restaurations_log (nom, prenom, motif, nom_fichier_restore)
+                                        VALUES (?, ?, ?, ?)
+                                    """, (input_nom.value, input_prenom.value, motif_complet, f"[LOCAL] {filename}"))
+                                    conn.commit()
+
+                                    # Backup immédiat post-restauration (Local + Push Cloud)
+                                    horodatage_secours = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                    secours_zip_path = f"backups/EasyFacture_PostRestore_{horodatage_secours}.zip"
+                                    
+                                    with zipfile.ZipFile(secours_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                                        if os.path.exists(DB_FILENAME):
+                                            zipf.write(DB_FILENAME, arcname=DB_FILENAME)
+                                        if os.path.exists("exports"):
+                                            for root, dirs, files in os.walk("exports"):
+                                                for file in files:
+                                                    full_path = os.path.join(root, file)
+                                                    rel_path = os.path.relpath(full_path, ".")
+                                                    zipf.write(full_path, arcname=rel_path)
+
+                                    if gdrive_backup:
+                                        try:
+                                            params = recuperer_parametres()
+                                            siret_propre = gdrive_backup.nettoyer_siret(params.get("siret", ""))
+                                            if len(siret_propre) == 14:
+                                                gdrive_backup.pousser_sauvegarde_vers_drive(secours_zip_path, siret_propre)
+                                        except Exception as g_err:
+                                            print(f"Alerte push secours post-restore Drive : {g_err}")
+
+                                    conn.close()
+
+                                    ui.notify(
+                                        "Restauration locale réussie, tracée et sécurisée ! Rechargement...",
+                                        type="positive",
+                                        close_button="Recharger",
+                                        on_dismiss=lambda: ui.navigate.reload(),
+                                    )
+                                except Exception as err:
+                                    ui.notify(
+                                        f"Erreur lors de la restauration : {str(err)}", type="negative"
+                                    )
+
+                            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                                ui.button("Annuler", on_click=dialog.close).props("flat color=slate")
+                                ui.button("Confirmer la restauration", on_click=valider_et_restaurer_local).props("color=amber-800 font-bold")
+
+                        dialog.open()
 
                     ui.upload(
                         label="Sélectionner un fichier .zip local",
                         auto_upload=True,
-                        on_upload=restaurer_sauvegarde_locale,
+                        on_upload=ouvrir_modal_gardefou_local,
                     ).props("accept=.zip flat color=warning").classes("max-w-md")
 
             # --- PANNEAU RESTAURATION DISTANTE (GOOGLE DRIVE) ---
@@ -183,14 +262,13 @@ def render_maintenance():
                                 ui.label("Module Google Drive indisponible.").classes("text-red-500")
                             return
 
-                        # Vérification stricte du SIRET (14 chiffres)
                         params = recuperer_parametres()
                         siret_brut = params.get("siret", "")
                         siret_propre = gdrive_backup.nettoyer_siret(siret_brut)
 
                         if len(siret_propre) != 14:
                             with container_liste_drive:
-                                ui.card().classes("w-full p-4 bg-red-50 border border-red-200 rounded-lg").classes("text-red-700 font-semibold")
+                                ui.card().classes("w-full p-4 bg-red-50 border border-red-200 rounded-lg")
                                 ui.label("⚠️ Renseigner un SIRET valide (14 chiffres) dans vos paramètres avant de récupérer vos données.").classes("text-sm text-red-600 font-bold")
                             return
 
@@ -217,14 +295,13 @@ def render_maintenance():
                                             ui.label(nom_f).classes("font-bold text-sm text-slate-800")
                                             ui.label(f"Taille : {taille_Mo:.2f} Mo | Créé le : {date_c}").classes("text-xs text-slate-500")
                                         
-                                        ui.button("Restaurer", icon="restore", on_click=lambda fid=file_id, fn=nom_f: ouvrir_modal_gardefou(fid, fn)).props("color=warning dense")
+                                        ui.button("Restaurer", icon="restore", on_click=lambda fid=file_id, fn=nom_f: ouvrir_modal_gardefou_drive(fid, fn)).props("color=warning dense")
 
                         except Exception as e:
                             with container_liste_drive:
                                 ui.label(f"Erreur de connexion au Drive : {str(e)}").classes("text-red-500 text-xs")
 
-                    # Modale de Garde-Fou (Sécurité & Traçabilité obligatoire)
-                    def ouvrir_modal_gardefou(file_id, filename):
+                    def ouvrir_modal_gardefou_drive(file_id, filename):
                         with ui.dialog() as dialog, ui.card().classes("w-[450px] p-6 space-y-4"):
                             ui.label("⚠️ Sécurité & Traçabilité - Restauration Cloud").classes("text-lg font-bold text-red-600")
                             ui.label(f"Vous vous apprêtez à restaurer le fichier : {filename}.\nCette action va écraser les données actuelles.").classes("text-xs text-slate-600")
@@ -233,7 +310,7 @@ def render_maintenance():
                             input_prenom = ui.input("Prénom de l'intervenant").classes("w-full").props("outlined dense required")
                             input_motif = ui.textarea("Motif de la restauration (ex: PC planté, BDD corrompue...)").classes("w-full").props("outlined dense required")
 
-                            def valider_et_restaurer():
+                            def valider_et_restaurer_drive():
                                 if not input_nom.value or not input_prenom.value or not input_motif.value:
                                     ui.notify("Veuillez remplir tous les champs (Nom, Prénom, Motif).", type="warning")
                                     return
@@ -255,16 +332,61 @@ def render_maintenance():
                                     if os.path.exists(chemin_temp):
                                         os.remove(chemin_temp)
 
+                                    # Traçabilité et indexation des compteurs post-restauration
                                     conn = database.get_conn()
+                                    cursor = conn.cursor()
+                                    
+                                    dernier_devis = "N/A"
+                                    dernier_facture = "N/A"
+                                    derniere_intervention = "N/A"
+                                    try:
+                                        dernier_devis = cursor.execute("SELECT numero_devis FROM devis ORDER BY id DESC LIMIT 1").fetchone()[0] or "Aucun"
+                                    except Exception:
+                                        pass
+                                    try:
+                                        dernier_facture = cursor.execute("SELECT numero_facture FROM factures ORDER BY id DESC LIMIT 1").fetchone()[0] or "Aucune"
+                                    except Exception:
+                                        pass
+                                    try:
+                                        derniere_intervention = cursor.execute("SELECT numero_intervention FROM interventions ORDER BY id DESC LIMIT 1").fetchone()[0] or "Aucune"
+                                    except Exception:
+                                        pass
+
+                                    motif_complet = f"{input_motif.value} [Dernier Devis: {dernier_devis} | Dernière Facture: {dernier_facture} | Dernière Interv: {derniere_intervention}]"
+
                                     conn.execute("""
                                         INSERT INTO restaurations_log (nom, prenom, motif, nom_fichier_restore)
                                         VALUES (?, ?, ?, ?)
-                                    """, (input_nom.value, input_prenom.value, input_motif.value, filename))
+                                    """, (input_nom.value, input_prenom.value, motif_complet, filename))
                                     conn.commit()
+
+                                    # Backup immédiat post-restauration (Local + Push Cloud)
+                                    horodatage_secours = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                    secours_zip_path = f"backups/EasyFacture_PostRestore_{horodatage_secours}.zip"
+                                    
+                                    with zipfile.ZipFile(secours_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                                        if os.path.exists(DB_FILENAME):
+                                            zipf.write(DB_FILENAME, arcname=DB_FILENAME)
+                                        if os.path.exists("exports"):
+                                            for root, dirs, files in os.walk("exports"):
+                                                for file in files:
+                                                    full_path = os.path.join(root, file)
+                                                    rel_path = os.path.relpath(full_path, ".")
+                                                    zipf.write(full_path, arcname=rel_path)
+
+                                    if gdrive_backup:
+                                        try:
+                                            params = recuperer_parametres()
+                                            siret_propre = gdrive_backup.nettoyer_siret(params.get("siret", ""))
+                                            if len(siret_propre) == 14:
+                                                gdrive_backup.pousser_sauvegarde_vers_drive(secours_zip_path, siret_propre)
+                                        except Exception as g_err:
+                                            print(f"Alerte push secours post-restore Drive : {g_err}")
+
                                     conn.close()
 
                                     ui.notify(
-                                        "Restauration Cloud réussie et tracée ! Rechargement...",
+                                        "Restauration Cloud réussie, tracée et sécurisée ! Rechargement...",
                                         type="positive",
                                         close_button="Recharger",
                                         on_dismiss=lambda: ui.navigate.reload(),
@@ -274,11 +396,74 @@ def render_maintenance():
 
                             with ui.row().classes("w-full justify-end gap-2 mt-4"):
                                 ui.button("Annuler", on_click=dialog.close).props("flat color=slate")
-                                ui.button("Confirmer la restauration", on_click=valider_et_restaurer).props("color=negative font-bold")
+                                ui.button("Confirmer la restauration", on_click=valider_et_restaurer_drive).props("color=negative font-bold")
 
                         dialog.open()
 
                     ui.button("Lister les sauvegardes du Drive (par SIRET)", icon="refresh", on_click=charger_liste_drive).props("color=primary outline")
+
+            # --- PANNEAU JOURNAL D'AUDIT (LECTURE SEULE & EXPORT) ---
+            with ui.tab_panel(tab_audit):
+                with ui.column().classes("gap-4 w-full"):
+                    ui.label("Historique immuable de toutes les restaurations effectuées (Locale & Cloud)").classes("text-sm text-slate-600")
+
+                    container_table_audit = ui.column().classes("w-full")
+
+                    def charger_journal_audit():
+                        container_table_audit.clear()
+                        try:
+                            conn = database.get_conn()
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT date_restauration, nom, prenom, motif, nom_fichier_restore FROM restaurations_log ORDER BY id DESC")
+                            lignes = cursor.fetchall()
+                            conn.close()
+
+                            if not lignes:
+                                with container_table_audit:
+                                    ui.label("Aucune restauration enregistrée pour le moment.").classes("italic text-slate-400")
+                                return
+
+                            with container_table_audit:
+                                columns = [
+                                    {"name": "date", "label": "Date & Heure", "field": "date", "sortable": True},
+                                    {"name": "intervenant", "label": "Intervenant", "field": "intervenant", "sortable": True},
+                                    {"name": "motif", "label": "Motif & Index Pièces", "field": "motif"},
+                                    {"name": "fichier", "label": "Fichier restauré", "field": "fichier"},
+                                ]
+                                rows = []
+                                for l in lignes:
+                                    rows.append({
+                                        "date": l["date_restauration"],
+                                        "intervenant": f"{l['prenom']} {l['nom']}",
+                                        "motif": l["motif"],
+                                        "fichier": l["nom_fichier_restore"]
+                                    })
+
+                                ui.table(columns=columns, rows=rows, row_key="date").classes("w-full")
+
+                                def exporter_csv_audit():
+                                    try:
+                                        import csv
+                                        os.makedirs("exports", exist_ok=True)
+                                        csv_path = "exports/journal_audit_restaurations.csv"
+                                        with open(csv_path, mode="w", newline="", encoding="utf-8-sig") as f:
+                                            writer = csv.writer(f)
+                                            writer.writerow(["Date", "Nom", "Prenom", "Motif", "Fichier"])
+                                            for l in lignes:
+                                                writer.writerow([l["date_restauration"], l["nom"], l["prenom"], l["motif"], l["nom_fichier_restore"]])
+                                        ui.download(csv_path)
+                                        ui.notify("Journal exporté avec succès !", type="positive")
+                                    except Exception as ex:
+                                        ui.notify(f"Erreur export CSV : {ex}", type="negative")
+
+                                ui.button("Exporter le journal (CSV)", icon="download", on_click=exporter_csv_audit).props("color=slate outline dense mt-2")
+
+                        except Exception as e:
+                            with container_table_audit:
+                                ui.label(f"Erreur de lecture du journal : {e}").classes("text-red-500 text-xs")
+
+                    tab_audit.on('click', charger_journal_audit)
+                    ui.button("Actualiser le journal", icon="refresh", on_click=charger_journal_audit).props("color=primary outline dense")
 
     # --- 3. INFORMATIONS TECHNIQUES ---
     with ui.card().classes(

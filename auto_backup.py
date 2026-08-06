@@ -108,9 +108,9 @@ def cleanup_old_drive_files(service, folder_id):
 
     for file in files:
       name = file.get('name', '')
-      if name.startswith('EasyFacture_Auto_') and name.endswith('.zip'):
+      if name.startswith('EasyFacture_') and name.endswith('.zip'):
         try:
-          date_str = name.replace('EasyFacture_Auto_', '').replace('.zip', '')
+          date_str = name.replace('EasyFacture_', '').replace('.zip', '')
           file_date = datetime.strptime(date_str, '%Y-%m-%d')
           if file_date < limite_date:
             print(
@@ -141,7 +141,7 @@ def upload_to_google_drive(file_path):
 
     file_name = os.path.basename(file_path)
 
-    # 1. Supprimer un éventuel ancien fichier du même jour
+    # 1. Supprimer un éventuel ancien fichier du même jour (écrasement)
     query = (
         f"'{subfolder_id}' in parents and name = '{file_name}' and"
         ' trashed = false'
@@ -177,14 +177,24 @@ def upload_to_google_drive(file_path):
 def lancer_sauvegarde_automatique():
   """Effectue la sauvegarde locale et déclenche l'envoi sur ton Drive."""
   try:
+    # SÉCURITÉ : On vérifie le SIRET avant de lancer toute sauvegarde
+    siret = get_company_siret()
+    if not siret or len(siret) != 14:
+      print("[Backup Auto] Ignoré : Aucun SIRET valide à 14 chiffres renseigné pour le moment.")
+      return
+
     backup_dir = get_backup_path()
 
     if not os.path.exists(backup_dir):
       os.makedirs(backup_dir, exist_ok=True)
 
     aujourdhui = datetime.now().strftime('%Y-%m-%d')
-    nom_zip = f'EasyFacture_Auto_{aujourdhui}.zip'
+    nom_zip = f'EasyFacture_{aujourdhui}.zip'
     chemin_zip = os.path.join(backup_dir, nom_zip)
+
+    # Écrasement direct du fichier local s'il existe déjà pour la journée
+    if os.path.exists(chemin_zip):
+      os.remove(chemin_zip)
 
     # Création du ZIP local
     with zipfile.ZipFile(chemin_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -198,14 +208,14 @@ def lancer_sauvegarde_automatique():
             rel_path = os.path.relpath(full_path, '.')
             zipf.write(full_path, arcname=rel_path)
 
-    # Envoi sur ton Google Drive (basé sur le SIRET)
+    # Envoi sur ton Google Drive (écrase automatiquement l'ancien fichier du même nom)
     upload_to_google_drive(chemin_zip)
 
     # Rotation locale (garde les 8 plus récents)
     fichiers = [
         os.path.join(backup_dir, f)
         for f in os.listdir(backup_dir)
-        if f.startswith('EasyFacture_Auto_') and f.endswith('.zip')
+        if f.startswith('EasyFacture_') and f.endswith('.zip')
     ]
 
     fichiers.sort(key=lambda x: os.path.getmtime(x))

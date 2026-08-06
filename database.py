@@ -184,7 +184,7 @@ def initialiser_bdd():
         FOREIGN KEY(facture_id) REFERENCES factures(id) ON DELETE SET NULL
     )""")
     
-  # Table de traçabilité des restaurations (Garde-fou)
+  # --- 7. TABLE DE TRAÇABILITÉ DES RESTAURATION (GARDE-FOU) ---
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS restaurations_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
