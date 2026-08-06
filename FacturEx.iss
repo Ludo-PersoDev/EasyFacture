@@ -1,8 +1,8 @@
-; Script d'installation Inno Setup (Propre - Sans BDD personnelle)
+; Script d'installation Inno Setup (EasyFacture)
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
-#define MyAppVersion "1.5"
+#define MyAppVersion "1.6"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 
@@ -33,10 +33,6 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "*.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "*.pyw"; DestDir: "{app}"; Flags: ignoreversion
 
-; Fichiers HTML de chargement et de mise à jour
-Source: "loading.html"; DestDir: "{app}"; Flags: ignoreversion
-Source: "updating.html"; DestDir: "{app}"; Flags: ignoreversion
-
 ; Dossier des ressources (logos, icônes)
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
@@ -49,5 +45,6 @@ Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client"; Flags: runminimized waituntilterminated
+; Installation automatique de toutes les dépendances Python requises pour la v1.6
+Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client pywebview"; Flags: runminimized waituntilterminated
 Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

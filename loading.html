@@ -87,7 +87,6 @@
         let msgIndex = 0;
         const msgElement = document.getElementById("loading-msg");
 
-        // Changement dynamique des petits messages toutes les 800ms
         const msgInterval = setInterval(() => {
             msgIndex++;
             if (msgIndex < messages.length) {
@@ -97,22 +96,30 @@
             }
         }, 800);
 
-        // Simulation de l'attente du serveur NiceGUI (3 secondes max ou détection de l'ouverture)
-        setTimeout(() => {
-            // Animation finale de bienvenue avant redirection ou fermeture de l'onglet de charge
-            clearInterval(msgInterval);
-            msgElement.textContent = "Bienvenue ! 🎉";
-            document.getElementById("spinner").style.display = "none";
-            
-            document.getElementById("main-container").classList.add("welcome-screen");
-            document.getElementById("main-container").classList.add("show");
+        // Fonction pour tester si le serveur NiceGUI est bien démarré
+        function checkServer() {
+            fetch("http://localhost:9876", { mode: 'no-cors' })
+                .then(() => {
+                    clearInterval(msgInterval);
+                    msgElement.textContent = "Bienvenue ! 🎉";
+                    document.getElementById("spinner").style.display = "none";
+                    
+                    document.getElementById("main-container").classList.add("welcome-screen");
+                    document.getElementById("main-container").classList.add("show");
 
-            // Redirection vers le serveur local NiceGUI après le fondu
-            setTimeout(() => {
-                window.location.href = "http://localhost:9876";
-            }, 600);
+                    // Redirection dans le *même* onglet (remplace la page de chargement au lieu d'en ouvrir une autre)
+                    setTimeout(() => {
+                        window.location.replace("http://localhost:9876");
+                    }, 500);
+                })
+                .catch(() => {
+                    // Si le serveur n'est pas encore prêt, on retente dans 400ms
+                    setTimeout(checkServer, 400);
+                });
+        }
 
-        }, 3200);
+        // Lancement du poll après un court délai initial
+        setTimeout(checkServer, 1000);
     </script>
 </body>
 </html>

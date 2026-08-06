@@ -171,13 +171,13 @@ def render_clients():
                         label_selection
                         buttons_container
 
-        # --- MODALE EXPLORATEUR DE PDF CLIENT (CORRIGÉE AVEC LISTE INTERACTIVE) ---
+        # --- MODALE EXPLORATEUR DE PDF INTÉGRÉ (SANS SORTIR DE L'APP) ---
         def ouvrir_explorateur_pdf_client(client_nom: str):
             dossier_export_base = os.path.join(os.getcwd(), "Export")
             dossier_client = os.path.join(dossier_export_base, client_nom)
             
-            with ui.dialog() as dialog, ui.card().classes('w-[750px] p-6'):
-                ui.label(f'Explorateur de documents - {client_nom}').classes('text-xl font-bold text-slate-800 mb-4')
+            with ui.dialog() as dialog, ui.card().classes('w-[850px] p-6'):
+                ui.label(f'Documents - {client_nom}').classes('text-xl font-bold text-slate-800 mb-4')
                 
                 types_disponibles = []
                 if os.path.exists(dossier_client):
@@ -192,11 +192,11 @@ def render_clients():
                     select_annee = ui.select([], label="Année").classes('flex-1').props('dense outlined')
                     select_mois = ui.select([], label="Mois").classes('flex-1').props('dense outlined')
 
-                container_fichiers = ui.column().classes('w-full my-4 border rounded-lg p-4 bg-slate-50 min-h-[160px] max-h-[250px] overflow-y-auto')
+                container_fichiers = ui.column().classes('w-full my-4 border rounded-lg p-4 bg-slate-50 min-h-[160px] max-h-[220px] overflow-y-auto')
                 
-                selected_pdf = {"path": None}
+                selected_pdf = {"path": None, "name": None}
                 fichiers_charges = []
-                cartes_fichiers = [] # Pour stocker les références visuelles et gérer la sélection
+                cartes_fichiers = []
 
                 def filtrer_affichage_fichiers():
                     container_fichiers.clear()
@@ -224,21 +224,20 @@ def render_clients():
                     with container_fichiers:
                         ui.label(f"{len(fichiers_filtres)} document(s) trouvé(s)").classes('text-xs font-semibold text-slate-500 mb-2')
                         
-                        # Sélection par défaut du premier élément
                         selected_pdf["path"] = fichiers_filtres[0]["path"]
+                        selected_pdf["name"] = fichiers_filtres[0]["name"]
 
-                        def selectionner_fichier(path, card_element):
-                            selected_pdf["path"] = path
-                            # Met à jour le style visuel de toutes les cartes
+                        def selectionner_fichier(f_info, card_element):
+                            selected_pdf["path"] = f_info["path"]
+                            selected_pdf["name"] = f_info["name"]
                             for c, p in cartes_fichiers:
-                                if p == path:
+                                if p == f_info["path"]:
                                     c.classes(remove='bg-white border-slate-200', add='bg-cyan-50 border-cyan-500 shadow-sm')
                                 else:
                                     c.classes(remove='bg-cyan-50 border-cyan-500 shadow-sm', add='bg-white border-slate-200')
 
                         for i, f in enumerate(fichiers_filtres):
                             is_first = (i == 0)
-                            # On crée une carte cliquable propre pour chaque PDF
                             card_classes = "w-full p-3 rounded-lg border cursor-pointer transition-all flex justify-between items-center mb-2 "
                             card_classes += "bg-cyan-50 border-cyan-500 shadow-sm" if is_first else "bg-white border-slate-200 hover:border-slate-300"
                             
@@ -249,8 +248,7 @@ def render_clients():
                                 ui.icon("description", color="primary" if is_first else "grey-5").classes("text-xl")
 
                             cartes_fichiers.append((card, f["path"]))
-                            # Associe le clic sur la carte au choix du fichier
-                            card.on('click', lambda _, p=f["path"], c=card: selectionner_fichier(p, c))
+                            card.on('click', lambda _, info=f, c=card: selectionner_fichier(info, c))
 
                 def mettre_a_jour_mois():
                     annee_choisie = select_annee.value
@@ -311,10 +309,9 @@ def render_clients():
                         return
 
                     liste_annees = sorted(list(annees_set), reverse=True)
-                    select_annees = liste_annees
-                    select_annee.options = select_annees
-                    if select_annees:
-                        select_annee.value = select_annees[0]
+                    select_annee.options = liste_annees
+                    if liste_annees:
+                        select_annee.value = liste_annees[0]
 
                 selected_type.on_value_change(lambda: charger_fichiers())
                 select_annee.on_value_change(lambda: mettre_a_jour_mois())
@@ -322,26 +319,27 @@ def render_clients():
 
                 charger_fichiers()
 
-                with ui.row().classes('w-full justify-between items-center mt-6'):
-                    def ouvrir_dans_explorer():
+                # --- BOUTON D'ACTION INTÉGRÉ ---
+                with ui.row().classes('w-full justify-end items-center mt-4 gap-2'):
+                    def visualiser_pdf_interne():
                         path = selected_pdf["path"]
                         if path and os.path.exists(path):
-                            subprocess.run(f'explorer /select, "{os.path.normpath(path)}"')
+                            dossier_export = os.path.join(os.getcwd(), "Export")
+                            rel_path = os.path.relpath(path, dossier_export).replace('\\', '/')
+                            pdf_url = f"/pdf/{rel_path}"
+
+                            with ui.dialog() as viewer_dialog, ui.card().classes('w-[900px] h-[80vh] p-4 flex flex-col'):
+                                with ui.row().classes('w-full justify-between items-center mb-2'):
+                                    ui.label(selected_pdf["name"]).classes('font-bold text-slate-700 text-sm')
+                                    ui.button(icon="close", on_click=viewer_dialog.close).props('flat dense')
+                                
+                                ui.element('iframe').props(f'src="{pdf_url}"').classes('w-full flex-grow border-0 rounded-lg')
+                            viewer_dialog.open()
                         else:
                             ui.notify("Veuillez sélectionner un fichier valide.", type="warning")
 
-                    ui.button("Ouvrir dans l'explorer", icon="folder_open", on_click=ouvrir_dans_explorer).props('outline color=primary dense')
-
-                    with ui.row().classes('gap-2'):
-                        def ouvrir_pdf_selectionne():
-                            path = selected_pdf["path"]
-                            if path and os.path.exists(path):
-                                os.startfile(path)
-                            else:
-                                ui.notify("Veuillez sélectionner un fichier valide.", type="warning")
-
-                        ui.button("Ouvrir le PDF", icon="visibility", on_click=ouvrir_pdf_selectionne).props('color=primary dense')
-                        ui.button("Fermer", on_click=dialog.close).props('flat dense')
+                    ui.button("Afficher le PDF", icon="visibility", on_click=visualiser_pdf_interne).props('color=primary dense')
+                    ui.button("Fermer", on_click=dialog.close).props('flat dense')
 
             dialog.open()
 

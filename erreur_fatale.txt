@@ -1,0 +1,1 @@
+Le serveur NiceGUI n'a pas répondu à temps lors du lancement par le launcher.

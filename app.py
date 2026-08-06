@@ -14,7 +14,6 @@ else:
   if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")
 
-# Protection multiprocessing pour l'exécutable PyInstaller
 if __name__ == "__main__":
   multiprocessing.freeze_support()
 
@@ -29,6 +28,7 @@ sys.path.insert(0, application_path)
 from auto_backup import lancer_sauvegarde_automatique
 import database
 from nicegui import app, ui
+from fastapi.responses import FileResponse
 from ui_analytics import render_analytics
 from ui_clients import render_clients
 from ui_devis import render_devis
@@ -40,73 +40,50 @@ from ui_passerelle import render_passerelle_export
 from ui_prestations import render_prestations
 
 database.initialiser_bdd()
-lancer_sauvegarde_automatique()
+
+# --- ROUTE API FASTAPI POUR SERVIR LES PDF PROPREMENT ---
+@app.get('/pdf/{filepath:path}')
+def serve_pdf(filepath: str):
+    full_path = os.path.join(os.getcwd(), "Export", filepath)
+    if os.path.exists(full_path):
+        return FileResponse(full_path, media_type='application/pdf')
+    return 'Fichier introuvable', 404
+
+# --- SAUVEGARDE PROPRE AU DÉMARRAGE DU SERVEUR ---
+@app.on_startup
+def startup_backup():
+    try:
+        lancer_sauvegarde_automatique()
+        print("[Backup] Sauvegarde Google Drive effectuée avec succès.")
+    except Exception as e:
+        print(f"[Backup Error] {e}")
+
 os.makedirs("assets", exist_ok=True)
 app.add_static_files("/assets", "assets")
 
 current_page = "Accueil"
-
 
 def set_page(page_name: str):
   global current_page
   current_page = page_name
   content_area.refresh()
 
-
-# --- VUE ACCUEIL (Style Odoo / Launcher) ---
 def render_odoo_home():
   with ui.column().classes("w-full items-center justify-center py-6 gap-8"):
     with ui.column().classes("items-center gap-2 text-center"):
-      ui.label("Bienvenue sur EasyFacture").classes(
-          "text-3xl font-extrabold text-slate-800"
-      )
-      ui.label("Sélectionnez un module pour commencer").classes(
-          "text-slate-500 text-sm"
-      )
+      ui.label("Bienvenue sur EasyFacture").classes("text-3xl font-extrabold text-slate-800")
+      ui.label("Sélectionnez un module pour commencer").classes("text-slate-500 text-sm")
 
     modules = [
-        # Ligne 1 : Configuration & Référentiels
-        (
-            "build",
-            "Infos de mon entreprise",
-            "slate",
-            "Configuration/modification de mon entreprise",
-        ),
+        ("build", "Infos de mon entreprise", "slate", "Configuration/modification de mon entreprise"),
         ("groups", "Clients", "teal", "Fichier clients & grille tarifaire"),
-        (
-            "list_alt",
-            "Catalogue",
-            "orange",
-            "Liste des prestations & formations",
-        ),
-        # Ligne 2 : Moteur de Facturation & Activité
+        ("list_alt", "Catalogue", "orange", "Liste des prestations & formations"),
         ("description", "Devis", "blue", "Gestion et conversion des devis"),
-        (
-            "event_available",
-            "Suivi des prestations réalisées",
-            "emerald",
-            "Saisie et suivi des prestations",
-        ),
+        ("event_available", "Suivi des prestations réalisées", "emerald", "Saisie et suivi des prestations"),
         ("receipt", "Factures", "violet", "Facturation & avoirs"),
-        # Ligne 3 : Pilotage, Dématérialisation & Technique
-        (
-            "bar_chart",
-            "CRM & Analytics",
-            "indigo",
-            "Suivi du CA et statistiques",
-        ),
-        (
-            "cloud_upload",
-            "Passerelle Factur-X",
-            "sky",
-            "Export et envoi des PDF vers la plateforme",
-        ),
-        (
-            "settings_backup_restore",
-            "Sauvegarde & Maintenance",
-            "zinc",
-            "Export/Import de la BDD et transfert PC",
-        ),
+        ("bar_chart", "CRM & Analytics", "indigo", "Suivi du CA et statistiques"),
+        ("cloud_upload", "Passerelle Factur-X", "sky", "Export et envoi des PDF vers la plateforme"),
+        ("settings_backup_restore", "Sauvegarde & Maintenance", "zinc", "Export/Import de la BDD et transfert PC"),
     ]
 
     with ui.grid(columns=3).classes("gap-6 max-w-5xl w-full px-4"):
@@ -120,8 +97,6 @@ def render_odoo_home():
           ui.label(title).classes("font-bold text-lg text-slate-800")
           ui.label(desc).classes("text-xs text-slate-500")
 
-
-# --- ZONE DE CONTENU DYNAMIQUE ---
 @ui.refreshable
 def content_area():
   if current_page == "Accueil":
@@ -147,39 +122,25 @@ def content_area():
   else:
     render_fallback()
 
-
 def render_fallback():
   with ui.column().classes("gap-4"):
-    ui.button(
-        "← Retour à l'accueil",
-        icon="arrow_back",
-        on_click=lambda: set_page("Accueil"),
-    ).props("flat color=primary")
-    ui.label(f"Module : {current_page}").classes(
-        "text-2xl font-bold text-slate-800"
-    )
+    ui.button("← Retour à l'accueil", icon="arrow_back", on_click=lambda: set_page("Accueil")).props("flat color=primary")
+    ui.label(f"Module : {current_page}").classes("text-2xl font-bold text-slate-800")
     ui.label("Contenu en cours de développement...").classes("text-slate-500")
 
-
-# En-tête fixe style Odoo
-with ui.header().classes(
-    "bg-white border-b border-slate-200 px-6 py-3 flex justify-between"
-    " items-center text-slate-800"
-):
+with ui.header().classes("bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center text-slate-800"):
   with ui.row().classes("items-center gap-4"):
-    ui.button(
-        icon="grid_view", on_click=lambda: set_page("Accueil")
-    ).props("flat round color=primary").tooltip("Menu Principal (Accueil)")
+    ui.button(icon="grid_view", on_click=lambda: set_page("Accueil")).props("flat round color=primary").tooltip("Menu Principal (Accueil)")
     ui.label("EasyFacture").classes("font-bold text-lg text-slate-800")
-  ui.badge("v1.0").props("color=slate outline")
+  ui.badge("v1.5").props("color=slate outline")
 
 with ui.column().classes("w-full p-6 bg-slate-50 min-h-screen"):
   content_area()
 
 if __name__ in {"__main__", "__mp_main__"}:
-    ui.run(
-        title="EasyFacture",
-        port=9876,
-        reload=False,
-        show=False,
-    )
+  ui.run(
+      title="EasyFacture",
+      port=9876,
+      reload=False,
+      show=False,
+  )
