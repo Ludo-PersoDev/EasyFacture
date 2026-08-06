@@ -109,9 +109,15 @@ def render_maintenance():
                                 ui.notify("Erreur : Veuillez renseigner un SIRET valide à 14 chiffres dans vos paramètres entreprise avant de sauvegarder sur le Cloud.", type="negative", timeout=6000)
                                 return
 
-                            os.makedirs("backups", exist_ok=True)
-                            horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            zip_filename = f"backups/EasyFacture_Backup_{horodatage}.zip"
+                            dossier_backup = get_backup_path()
+                            os.makedirs(dossier_backup, exist_ok=True)
+                            
+                            date_jour = datetime.now().strftime("%Y-%m-%d")
+                            zip_filename = os.path.join(dossier_backup, f"EasyFacture_{date_jour}.zip")
+
+                            # Écrasement direct si le fichier du jour existe déjà
+                            if os.path.exists(zip_filename):
+                                os.remove(zip_filename)
 
                             with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
                                 if os.path.exists(DB_FILENAME):
@@ -200,9 +206,14 @@ def render_maintenance():
                                     """, (input_nom.value, input_prenom.value, motif_complet, f"[LOCAL] {filename}"))
                                     conn.commit()
 
-                                    # Backup immédiat post-restauration (Local + Push Cloud)
-                                    horodatage_secours = datetime.now().strftime('%Y%m%d_%H%M%S')
-                                    secours_zip_path = f"backups/EasyFacture_PostRestore_{horodatage_secours}.zip"
+                                    # Backup immédiat post-restauration unifié
+                                    dossier_backup = get_backup_path()
+                                    os.makedirs(dossier_backup, exist_ok=True)
+                                    date_jour = datetime.now().strftime('%Y-%m-%d')
+                                    secours_zip_path = os.path.join(dossier_backup, f"EasyFacture_{date_jour}.zip")
+                                    
+                                    if os.path.exists(secours_zip_path):
+                                        os.remove(secours_zip_path)
                                     
                                     with zipfile.ZipFile(secours_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                                         if os.path.exists(DB_FILENAME):
@@ -360,10 +371,15 @@ def render_maintenance():
                                     """, (input_nom.value, input_prenom.value, motif_complet, filename))
                                     conn.commit()
 
-                                    # Backup immédiat post-restauration (Local + Push Cloud)
-                                    horodatage_secours = datetime.now().strftime('%Y%m%d_%H%M%S')
-                                    secours_zip_path = f"backups/EasyFacture_PostRestore_{horodatage_secours}.zip"
+                                    # Backup immédiat post-restauration unifié
+                                    dossier_backup = get_backup_path()
+                                    os.makedirs(dossier_backup, exist_ok=True)
+                                    date_jour = datetime.now().strftime('%Y-%m-%d')
+                                    secours_zip_path = os.path.join(dossier_backup, f"EasyFacture_{date_jour}.zip")
                                     
+                                    if os.path.exists(secours_zip_path):
+                                        os.remove(secours_zip_path)
+                                        
                                     with zipfile.ZipFile(secours_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                                         if os.path.exists(DB_FILENAME):
                                             zipf.write(DB_FILENAME, arcname=DB_FILENAME)
