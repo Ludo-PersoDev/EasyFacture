@@ -7,6 +7,7 @@ import smtplib
 import zipfile
 import database
 from nicegui import ui
+from ui_helpers import afficher_note_importante
 
 
 def parse_date(date_str):
@@ -123,387 +124,401 @@ def envoyer_email_depot_smtp(dest_email, liste_factures, config_smtp):
 
 
 def render_passerelle_export():
-  ui.label('Passerelle Factur-X & Dématérialisation').classes(
-      'text-2xl font-bold text-slate-800 mb-6'
-  )
-
-  conn = database.get_conn()
-  try:
-    conn.execute(
-        'ALTER TABLE factures ADD COLUMN statut_export_plateforme TEXT DEFAULT'
-        " 'À transmettre'"
-    )
-    conn.execute(
-        'ALTER TABLE factures ADD COLUMN date_export_plateforme TEXT'
-    )
-    conn.commit()
-  except Exception:
-    pass
-
-  row_config = None
-  try:
-    row_config = conn.execute(
-        'SELECT * FROM configuration WHERE id=1'
-    ).fetchone()
-  except Exception:
-    pass
-
-  config_dict = dict(row_config) if row_config else {}
-  email_depot_initial = config_dict.get('email_depot_plateforme') or ''
-  conn.close()
-
-  # --- 1. CONFIGURATION ADRESSE D'INGESTION ---
-  with ui.card().classes(
-      'w-full p-6 bg-white border border-slate-200 rounded-xl space-y-4 mb-6'
-      ' shadow-sm'
-  ):
-    with ui.row().classes('items-center justify-between w-full'):
-      with ui.row().classes('items-center gap-3'):
-        ui.icon('cloud_upload', size='32px', color='primary')
-        with ui.column():
-          ui.label(
-              'Paramètres de la Plateforme Récipiendaire (ex: Tiime, PPF)'
-          ).classes('text-lg font-bold text-slate-800')
-          ui.label(
-              "Définissez l'adresse email d'ingestion automatique de votre"
-              ' plateforme.'
-          ).classes('text-xs text-slate-500')
-
-    with ui.row().classes('w-full items-center gap-4 mt-2'):
-      input_email_depot = (
-          ui.input(
-              label="Adresse e-mail de dépôt plateforme",
-              placeholder='ex: factures-ludovic@tiime.fr',
-              value=email_depot_initial,
+      with ui.row().classes("w-full justify-between items-center mb-6"):  
+          ui.label('Passerelle Factur-X & Dématérialisation').classes(
+              'text-2xl font-bold text-slate-800 mb-6'
           )
-          .classes('flex-1')
-          .props('outlined dense')
-      )
+          ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
+            "Points d'attention - Passerelle de transmission",
+            [
+                "EasyFacture ne génère pas directement le format Factur-X lui-même : l'application transmet vos PDF standardisés à la passerelle.",
+                "⚠️ PRÉREQUIS INDISPENSABLE : Pour que l'envoi fonctionne, la section d'envoi de mail SMTP doit être correctement remplie et paramétrée dans les paramètres de l'entreprise."
+            ],
+            tuto_titre="Tuto : Fonctionnement des envois & Suivi",
+            tuto_etapes=[
+                "• Adresse de dépôt : Renseignez l'adresse e-mail de dépôt fournie par votre plateforme (Tiime, PPF, etc.) dans la zone dédiée.",
+                "• Suivi des transmissions : Le tableau de bord indique précisément l'état de chaque facture (transmise ou à transmettre) et vérifie la présence du PDF.",
+                "• Envoi et Pack ZIP : Vous pouvez expédier les fichiers directement par e-mail vers la plateforme ou télécharger un pack ZIP global pour vos archives."
+            ]
+        )).props("flat color=amber")
 
-      def enregistrer_email_depot():
-        c = database.get_conn()
-        try:
-          c.execute(
-              'ALTER TABLE configuration ADD COLUMN email_depot_plateforme TEXT'
-          )
-        except Exception:
-          pass
-        c.execute(
-            'UPDATE configuration SET email_depot_plateforme = ? WHERE id = 1',
-            (input_email_depot.value.strip(),),
+      conn = database.get_conn()
+      try:
+        conn.execute(
+            'ALTER TABLE factures ADD COLUMN statut_export_plateforme TEXT DEFAULT'
+            " 'À transmettre'"
         )
-        c.commit()
-        c.close()
-        ui.notify(
-            'Adresse e-mail de la plateforme sauvegardée !', type='positive'
+        conn.execute(
+            'ALTER TABLE factures ADD COLUMN date_export_plateforme TEXT'
         )
+        conn.commit()
+      except Exception:
+        pass
 
-      ui.button(
-          'Enregistrer', icon='save', on_click=enregistrer_email_depot
-      ).props('color=primary dense')
+      row_config = None
+      try:
+        row_config = conn.execute(
+            'SELECT * FROM configuration WHERE id=1'
+        ).fetchone()
+      except Exception:
+        pass
 
-  # --- 2. BARRE DE SELECTION ET FILTRES ---
-  annee_actuelle = str(datetime.now().year)
-
-  with ui.card().classes(
-      'w-full p-6 bg-white border border-slate-200 rounded-xl space-y-4 mb-6'
-      ' shadow-sm'
-  ):
-    with ui.row().classes(
-        'w-full items-center justify-between gap-4 border-b pb-3'
-    ):
-      ui.label('Sélection des factures à exporter').classes(
-          'text-lg font-bold text-slate-800'
-      )
-
-      with ui.row().classes('items-center gap-3'):
-        select_annee = (
-            ui.select(
-                options={annee_actuelle: annee_actuelle, 'Toutes': 'Toutes'},
-                value=annee_actuelle,
-                label='Année',
-            )
-            .classes('w-28')
-            .props('dense outlined')
-        )
-
-        select_statut_facture = (
-            ui.select(
-                options={
-                    'Toutes': 'Tous statuts factures',
-                    'Émise': 'Émise',
-                    'Payée': 'Payée',
-                },
-                value='Toutes',
-                label='Statut Facture',
-            )
-            .classes('w-44')
-            .props('dense outlined')
-        )
-
-        select_statut_export = (
-            ui.select(
-                options={
-                    'À transmettre': 'À transmettre uniquement',
-                    'Transmise': 'Transmises uniquement',
-                    'Toutes': 'Tous les états d\'export',
-                },
-                value='À transmettre',
-                label='État Téléversement',
-            )
-            .classes('w-56')
-            .props('dense outlined')
-        )
-
-    # Table des factures
-    columns = [
-        {
-            'name': 'numero_facture',
-            'label': 'N° Facture',
-            'field': 'numero_facture',
-            'align': 'left',
-            'sortable': True,
-        },
-        {
-            'name': 'date_creation',
-            'label': 'Date',
-            'field': 'date_creation',
-            'align': 'center',
-            'sortable': True,
-        },
-        {
-            'name': 'nom_societe',
-            'label': 'Client',
-            'field': 'nom_societe',
-            'align': 'left',
-            'sortable': True,
-        },
-        {
-            'name': 'total_ttc_txt',
-            'label': 'Montant TTC',
-            'field': 'total_ttc_txt',
-            'align': 'right',
-            'sortable': True,
-        },
-        {
-            'name': 'statut',
-            'label': 'Statut Interne',
-            'field': 'statut',
-            'align': 'center',
-            'sortable': True,
-        },
-        {
-            'name': 'statut_export_txt',
-            'label': 'État Envoi Plateforme',
-            'field': 'statut_export_txt',
-            'align': 'center',
-            'sortable': True,
-        },
-        {
-            'name': 'pdf_existant',
-            'label': 'Fichier PDF',
-            'field': 'pdf_existant',
-            'align': 'center',
-            'sortable': True,
-        },
-    ]
-
-    grid_export = ui.table(
-        columns=columns, rows=[], row_key='id', selection='multiple', pagination=10
-    ).classes('w-full')
-
-    grid_export.add_slot(
-        'body-cell-statut_export_txt',
-        """
-        <q-td :props="props">
-            <q-chip dense :color="props.row.statut_export_plateforme === 'Transmise' ? 'emerald-2' : 'amber-2'" 
-                    :text-color="props.row.statut_export_plateforme === 'Transmise' ? 'emerald-9' : 'amber-9'" 
-                    :icon="props.row.statut_export_plateforme === 'Transmise' ? 'check_circle' : 'pending'">
-                {{ props.value }}
-            </q-chip>
-        </q-td>
-    """,
-    )
-
-    # --- 3. ACTIONS DE MASSE (ZIP & TRANSMISSION EMAIL SMTP) ---
-    with ui.row().classes('w-full justify-between items-center pt-4'):
-      lbl_compteur = ui.label('0 facture(s) sélectionnée(s)').classes(
-          'text-sm font-semibold text-slate-600'
-      )
-
-      with ui.row().classes('gap-3'):
-
-        def generer_pack_zip():
-          selection = grid_export.selected
-          if not selection:
-            ui.notify(
-                'Veuillez sélectionner au moins une facture.', type='warning'
-            )
-            return
-
-          os.makedirs('exports', exist_ok=True)
-          zip_filename = (
-              'exports/pack_factures_'
-              f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-          )
-
-          fichiers_ajoutes = 0
-          with zipfile.ZipFile(zip_filename, 'w') as zipf:
-            for row in selection:
-              pdf_path = row.get('pdf_path_reel')
-              if pdf_path and os.path.exists(pdf_path):
-                zipf.write(pdf_path, arcname=os.path.basename(pdf_path))
-                fichiers_ajoutes += 1
-
-          if fichiers_ajoutes > 0:
-            ui.notify(
-                f'Pack ZIP créé avec succès ({fichiers_ajoutes} PDF) !',
-                type='positive',
-            )
-            ui.download(zip_filename)
-          else:
-            ui.notify(
-                'Aucun fichier PDF trouvé sur le disque pour ces factures.',
-                type='negative',
-            )
-
-        def envoyer_lot_plateforme():
-          selection = grid_export.selected
-          dest_email = input_email_depot.value.strip()
-
-          if not selection:
-            ui.notify(
-                'Veuillez sélectionner au moins une facture.', type='warning'
-            )
-            return
-          if not dest_email:
-            ui.notify(
-                "Veuillez renseigner l'adresse email de la plateforme ci-dessus.",
-                type='warning',
-            )
-            return
-
-          # Récupération de la configuration SMTP
-          c_smtp = database.get_conn()
-          row_s = c_smtp.execute(
-              'SELECT * FROM configuration WHERE id=1'
-          ).fetchone()
-          c_smtp.close()
-
-          if not row_s:
-            ui.notify(
-                'Configuration d\'entreprise introuvable.', type='negative'
-            )
-            return
-
-          config_smtp = dict(row_s)
-
-          ui.notify(
-              f'Envoi de {len(selection)} facture(s) vers {dest_email} en'
-              ' cours...',
-              type='info',
-          )
-
-          try:
-            nb_envoyes = envoyer_email_depot_smtp(
-                dest_email, selection, config_smtp
-            )
-
-            # Mise à jour du statut en BDD après succès de l'envoi
-            date_actuelle = datetime.now().strftime('%Y-%m-%d %H:%M')
-            conn_upd = database.get_conn()
-            for row in selection:
-              conn_upd.execute(
-                  "UPDATE factures SET statut_export_plateforme = 'Transmise',"
-                  ' date_export_plateforme = ? WHERE id = ?',
-                  (date_actuelle, row['id']),
-              )
-            conn_upd.commit()
-            conn_upd.close()
-
-            ui.notify(
-                f'Succès : {nb_envoyes} PDF transmis par e-mail à {dest_email} !',
-                type='positive',
-            )
-            charger_factures()
-
-          except Exception as ex:
-            ui.notify(f'Erreur d\'envoi e-mail : {str(ex)}', type='negative')
-
-        ui.button(
-            'Télécharger le Pack ZIP', icon='archive', on_click=generer_pack_zip
-        ).props('outline color=primary')
-        ui.button(
-            'Transmettre à la Plateforme',
-            icon='send',
-            on_click=envoyer_lot_plateforme,
-        ).props('color=positive font-bold')
-
-  # --- 4. LOGIQUE DE CHARGEMENT SÉCURISÉE ---
-  def charger_factures():
-    conn = database.get_conn()
-    try:
-      rows = conn.execute("""
-                SELECT f.*, c.nom_societe 
-                FROM factures f 
-                JOIN clients c ON f.client_id = c.id 
-                WHERE f.statut != 'Brouillon' AND f.statut != 'Annulée'
-                ORDER BY f.id DESC
-            """).fetchall()
-    except Exception:
-      rows = []
-    finally:
+      config_dict = dict(row_config) if row_config else {}
+      email_depot_initial = config_dict.get('email_depot_plateforme') or ''
       conn.close()
 
-    sel_annee = select_annee.value
-    sel_statut_fac = select_statut_facture.value
-    sel_statut_exp = select_statut_export.value
+      # --- 1. CONFIGURATION ADRESSE D'INGESTION ---
+      with ui.card().classes(
+          'w-full p-6 bg-white border border-slate-200 rounded-xl space-y-4 mb-6'
+          ' shadow-sm'
+      ):
+        with ui.row().classes('items-center justify-between w-full'):
+          with ui.row().classes('items-center gap-3'):
+            ui.icon('cloud_upload', size='32px', color='primary')
+            with ui.column():
+              ui.label(
+                  'Paramètres de la Plateforme Récipiendaire (ex: Tiime, PPF)'
+              ).classes('text-lg font-bold text-slate-800')
+              ui.label(
+                  "Définissez l'adresse email d'ingestion automatique de votre"
+                  ' plateforme.'
+              ).classes('text-xs text-slate-500')
 
-    rows_formatted = []
-    for r in rows:
-      item = dict(r)
-      d = parse_date(item.get('date_creation'))
+        with ui.row().classes('w-full items-center gap-4 mt-2'):
+          input_email_depot = (
+              ui.input(
+                  label="Adresse e-mail de dépôt plateforme",
+                  placeholder='ex: factures-ludovic@tiime.fr',
+                  value=email_depot_initial,
+              )
+              .classes('flex-1')
+              .props('outlined dense')
+          )
 
-      statut_exp = item.get('statut_export_plateforme') or 'À transmettre'
-      item['statut_export_plateforme'] = statut_exp
+          def enregistrer_email_depot():
+            c = database.get_conn()
+            try:
+              c.execute(
+                  'ALTER TABLE configuration ADD COLUMN email_depot_plateforme TEXT'
+              )
+            except Exception:
+              pass
+            c.execute(
+                'UPDATE configuration SET email_depot_plateforme = ? WHERE id = 1',
+                (input_email_depot.value.strip(),),
+            )
+            c.commit()
+            c.close()
+            ui.notify(
+                'Adresse e-mail de la plateforme sauvegardée !', type='positive'
+            )
 
-      if sel_annee != 'Toutes' and d and str(d.year) != sel_annee:
-        continue
-      if sel_statut_fac != 'Toutes' and item.get('statut') != sel_statut_fac:
-        continue
-      if sel_statut_exp != 'Toutes' and statut_exp != sel_statut_exp:
-        continue
+          ui.button(
+              'Enregistrer', icon='save', on_click=enregistrer_email_depot
+          ).props('color=primary dense')
 
-      num = item.get('numero_facture')
-      client_nom = item.get('nom_societe')
-      pdf_path = trouver_chemin_pdf(client_nom, num)
+      # --- 2. BARRE DE SELECTION ET FILTRES ---
+      annee_actuelle = str(datetime.now().year)
 
-      item['pdf_path_reel'] = pdf_path
-      item['total_ttc_txt'] = f"{(item.get('total_ttc') or 0.0):.2f} €"
-      item['pdf_existant'] = '✅ Prêt' if pdf_path else '❌ Absent'
+      with ui.card().classes(
+          'w-full p-6 bg-white border border-slate-200 rounded-xl space-y-4 mb-6'
+          ' shadow-sm'
+      ):
+        with ui.row().classes(
+            'w-full items-center justify-between gap-4 border-b pb-3'
+        ):
+          ui.label('Sélection des factures à exporter').classes(
+              'text-lg font-bold text-slate-800'
+          )
 
-      if statut_exp == 'Transmise':
-        date_exp = item.get('date_export_plateforme') or ''
-        item['statut_export_txt'] = (
-            f"Transmise ({date_exp.split(' ')[0]})" if date_exp else 'Transmise'
+          with ui.row().classes('items-center gap-3'):
+            select_annee = (
+                ui.select(
+                    options={annee_actuelle: annee_actuelle, 'Toutes': 'Toutes'},
+                    value=annee_actuelle,
+                    label='Année',
+                )
+                .classes('w-28')
+                .props('dense outlined')
+            )
+
+            select_statut_facture = (
+                ui.select(
+                    options={
+                        'Toutes': 'Tous statuts factures',
+                        'Émise': 'Émise',
+                        'Payée': 'Payée',
+                    },
+                    value='Toutes',
+                    label='Statut Facture',
+                )
+                .classes('w-44')
+                .props('dense outlined')
+            )
+
+            select_statut_export = (
+                ui.select(
+                    options={
+                        'À transmettre': 'À transmettre uniquement',
+                        'Transmise': 'Transmises uniquement',
+                        'Toutes': 'Tous les états d\'export',
+                    },
+                    value='À transmettre',
+                    label='État Téléversement',
+                )
+                .classes('w-56')
+                .props('dense outlined')
+            )
+
+        # Table des factures
+        columns = [
+            {
+                'name': 'numero_facture',
+                'label': 'N° Facture',
+                'field': 'numero_facture',
+                'align': 'left',
+                'sortable': True,
+            },
+            {
+                'name': 'date_creation',
+                'label': 'Date',
+                'field': 'date_creation',
+                'align': 'center',
+                'sortable': True,
+            },
+            {
+                'name': 'nom_societe',
+                'label': 'Client',
+                'field': 'nom_societe',
+                'align': 'left',
+                'sortable': True,
+            },
+            {
+                'name': 'total_ttc_txt',
+                'label': 'Montant TTC',
+                'field': 'total_ttc_txt',
+                'align': 'right',
+                'sortable': True,
+            },
+            {
+                'name': 'statut',
+                'label': 'Statut Interne',
+                'field': 'statut',
+                'align': 'center',
+                'sortable': True,
+            },
+            {
+                'name': 'statut_export_txt',
+                'label': 'État Envoi Plateforme',
+                'field': 'statut_export_txt',
+                'align': 'center',
+                'sortable': True,
+            },
+            {
+                'name': 'pdf_existant',
+                'label': 'Fichier PDF',
+                'field': 'pdf_existant',
+                'align': 'center',
+                'sortable': True,
+            },
+        ]
+
+        grid_export = ui.table(
+            columns=columns, rows=[], row_key='id', selection='multiple', pagination=10
+        ).classes('w-full')
+
+        grid_export.add_slot(
+            'body-cell-statut_export_txt',
+            """
+            <q-td :props="props">
+                <q-chip dense :color="props.row.statut_export_plateforme === 'Transmise' ? 'emerald-2' : 'amber-2'" 
+                        :text-color="props.row.statut_export_plateforme === 'Transmise' ? 'emerald-9' : 'amber-9'" 
+                        :icon="props.row.statut_export_plateforme === 'Transmise' ? 'check_circle' : 'pending'">
+                    {{ props.value }}
+                </q-chip>
+            </q-td>
+        """,
         )
-      else:
-        item['statut_export_txt'] = 'À transmettre'
 
-      rows_formatted.append(item)
+        # --- 3. ACTIONS DE MASSE (ZIP & TRANSMISSION EMAIL SMTP) ---
+        with ui.row().classes('w-full justify-between items-center pt-4'):
+          lbl_compteur = ui.label('0 facture(s) sélectionnée(s)').classes(
+              'text-sm font-semibold text-slate-600'
+          )
 
-    grid_export.selected.clear()
-    grid_export.rows = rows_formatted
-    grid_export.update()
+          with ui.row().classes('gap-3'):
 
-  def on_selection_change():
-    lbl_compteur.set_text(
-        f'{len(grid_export.selected)} facture(s) sélectionnée(s)'
-    )
+            def generer_pack_zip():
+              selection = grid_export.selected
+              if not selection:
+                ui.notify(
+                    'Veuillez sélectionner au moins une facture.', type='warning'
+                )
+                return
 
-  grid_export.on('selection', on_selection_change)
-  select_annee.on_value_change(lambda: charger_factures())
-  select_statut_facture.on_value_change(lambda: charger_factures())
-  select_statut_export.on_value_change(lambda: charger_factures())
+              os.makedirs('exports', exist_ok=True)
+              zip_filename = (
+                  'exports/pack_factures_'
+                  f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+              )
 
-  charger_factures()
+              fichiers_ajoutes = 0
+              with zipfile.ZipFile(zip_filename, 'w') as zipf:
+                for row in selection:
+                  pdf_path = row.get('pdf_path_reel')
+                  if pdf_path and os.path.exists(pdf_path):
+                    zipf.write(pdf_path, arcname=os.path.basename(pdf_path))
+                    fichiers_ajoutes += 1
+
+              if fichiers_ajoutes > 0:
+                ui.notify(
+                    f'Pack ZIP créé avec succès ({fichiers_ajoutes} PDF) !',
+                    type='positive',
+                )
+                ui.download(zip_filename)
+              else:
+                ui.notify(
+                    'Aucun fichier PDF trouvé sur le disque pour ces factures.',
+                    type='negative',
+                )
+
+            def envoyer_lot_plateforme():
+              selection = grid_export.selected
+              dest_email = input_email_depot.value.strip()
+
+              if not selection:
+                ui.notify(
+                    'Veuillez sélectionner au moins une facture.', type='warning'
+                )
+                return
+              if not dest_email:
+                ui.notify(
+                    "Veuillez renseigner l'adresse email de la plateforme ci-dessus.",
+                    type='warning',
+                )
+                return
+
+              # Récupération de la configuration SMTP
+              c_smtp = database.get_conn()
+              row_s = c_smtp.execute(
+                  'SELECT * FROM configuration WHERE id=1'
+              ).fetchone()
+              c_smtp.close()
+
+              if not row_s:
+                ui.notify(
+                    'Configuration d\'entreprise introuvable.', type='negative'
+                )
+                return
+
+              config_smtp = dict(row_s)
+
+              ui.notify(
+                  f'Envoi de {len(selection)} facture(s) vers {dest_email} en'
+                  ' cours...',
+                  type='info',
+              )
+
+              try:
+                nb_envoyes = envoyer_email_depot_smtp(
+                    dest_email, selection, config_smtp
+                )
+
+                # Mise à jour du statut en BDD après succès de l'envoi
+                date_actuelle = datetime.now().strftime('%Y-%m-%d %H:%M')
+                conn_upd = database.get_conn()
+                for row in selection:
+                  conn_upd.execute(
+                      "UPDATE factures SET statut_export_plateforme = 'Transmise',"
+                      ' date_export_plateforme = ? WHERE id = ?',
+                      (date_actuelle, row['id']),
+                  )
+                conn_upd.commit()
+                conn_upd.close()
+
+                ui.notify(
+                    f'Succès : {nb_envoyes} PDF transmis par e-mail à {dest_email} !',
+                    type='positive',
+                )
+                charger_factures()
+
+              except Exception as ex:
+                ui.notify(f'Erreur d\'envoi e-mail : {str(ex)}', type='negative')
+
+            ui.button(
+                'Télécharger le Pack ZIP', icon='archive', on_click=generer_pack_zip
+            ).props('outline color=primary')
+            ui.button(
+                'Transmettre à la Plateforme',
+                icon='send',
+                on_click=envoyer_lot_plateforme,
+            ).props('color=positive font-bold')
+
+      # --- 4. LOGIQUE DE CHARGEMENT SÉCURISÉE ---
+      def charger_factures():
+        conn = database.get_conn()
+        try:
+          rows = conn.execute("""
+                    SELECT f.*, c.nom_societe 
+                    FROM factures f 
+                    JOIN clients c ON f.client_id = c.id 
+                    WHERE f.statut != 'Brouillon' AND f.statut != 'Annulée'
+                    ORDER BY f.id DESC
+                """).fetchall()
+        except Exception:
+          rows = []
+        finally:
+          conn.close()
+
+        sel_annee = select_annee.value
+        sel_statut_fac = select_statut_facture.value
+        sel_statut_exp = select_statut_export.value
+
+        rows_formatted = []
+        for r in rows:
+          item = dict(r)
+          d = parse_date(item.get('date_creation'))
+
+          statut_exp = item.get('statut_export_plateforme') or 'À transmettre'
+          item['statut_export_plateforme'] = statut_exp
+
+          if sel_annee != 'Toutes' and d and str(d.year) != sel_annee:
+            continue
+          if sel_statut_fac != 'Toutes' and item.get('statut') != sel_statut_fac:
+            continue
+          if sel_statut_exp != 'Toutes' and statut_exp != sel_statut_exp:
+            continue
+
+          num = item.get('numero_facture')
+          client_nom = item.get('nom_societe')
+          pdf_path = trouver_chemin_pdf(client_nom, num)
+
+          item['pdf_path_reel'] = pdf_path
+          item['total_ttc_txt'] = f"{(item.get('total_ttc') or 0.0):.2f} €"
+          item['pdf_existant'] = '✅ Prêt' if pdf_path else '❌ Absent'
+
+          if statut_exp == 'Transmise':
+            date_exp = item.get('date_export_plateforme') or ''
+            item['statut_export_txt'] = (
+                f"Transmise ({date_exp.split(' ')[0]})" if date_exp else 'Transmise'
+            )
+          else:
+            item['statut_export_txt'] = 'À transmettre'
+
+          rows_formatted.append(item)
+
+        grid_export.selected.clear()
+        grid_export.rows = rows_formatted
+        grid_export.update()
+
+      def on_selection_change():
+        lbl_compteur.set_text(
+            f'{len(grid_export.selected)} facture(s) sélectionnée(s)'
+        )
+
+      grid_export.on('selection', on_selection_change)
+      select_annee.on_value_change(lambda: charger_factures())
+      select_statut_facture.on_value_change(lambda: charger_factures())
+      select_statut_export.on_value_change(lambda: charger_factures())
+
+      charger_factures()

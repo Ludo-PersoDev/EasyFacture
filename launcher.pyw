@@ -5,12 +5,26 @@ import time
 import urllib.request
 import json
 import tempfile
+import base64
 import webview
 import version
 
 URL = "http://localhost:9876"
 CURRENT_VERSION = version.VERSION
 GITHUB_API_URL = "https://api.github.com/repos/Ludo-PersoDev/EasyFacture/releases/latest"
+
+def tuer_anciennes_instances():
+    """Libère proprement le port 9876 s'il est déjà utilisé par une ancienne instance."""
+    if sys.platform == "win32":
+        try:
+            output = subprocess.check_output("netstat -ano | findstr :9876", shell=True).decode()
+            for line in output.splitlines():
+                if "LISTENING" in line:
+                    parts = line.strip().split()
+                    pid = parts[-1]
+                    subprocess.run(["taskkill", "/f", "/pid", pid], capture_output=True, check=False)
+        except Exception:
+            pass
 
 def is_app_running():
     try:
@@ -132,7 +146,6 @@ def executer_mise_a_jour(script_dir):
     t = threading.Thread(target=background_update_task)
     t.start()
 
-    # Récupération de la résolution pour la fenêtre de maj avec marges
     import ctypes
     user32 = ctypes.windll.user32
     user32.SetProcessDPIAware()
@@ -175,7 +188,9 @@ if __name__ == "__main__":
         sys.exit(0)
 
     verifier_et_installer_maj_avec_ui(script_dir)
-
+    
+    tuer_anciennes_instances()
+    
     server_process = None
 
     if not is_app_running():
@@ -188,14 +203,23 @@ if __name__ == "__main__":
 
         server_process = subprocess.Popen([python_exe, script_app], cwd=script_dir)
 
-    loading_html = """
+    # --- CHARGEMENT DU LOGO EN BASE64 ---
+    logo_base64 = ""
+    logo_path = os.path.join(script_dir, "assets", "logo.ico")
+    if os.path.exists(logo_path):
+        with open(logo_path, "rb") as img_file:
+            logo_base64 = base64.b64encode(img_file.read()).decode('utf-8')
+
+    logo_img_tag = f'<img src="data:image/x-icon;base64,{logo_base64}" alt="Logo EasyFacture" class="logo">' if logo_base64 else ''
+
+    loading_html = f"""
     <!DOCTYPE html>
     <html lang="fr">
     <head>
         <meta charset="UTF-8">
         <title>Chargement d'EasyFacture</title>
         <style>
-            body, html {
+            body, html {{
                 margin: 0;
                 padding: 0;
                 background-color: #0f172a;
@@ -206,30 +230,31 @@ if __name__ == "__main__":
                 height: 100vh;
                 color: #f8fafc;
                 overflow: hidden !important;
-            }
-            .container {
+            }}
+            .container {{
                 text-align: center;
                 transition: opacity 0.8s ease-in-out;
-            }
-            .logo {
+            }}
+            .logo {{
                 width: 90px;
                 height: 90px;
                 margin-bottom: 20px;
+                object-fit: contain;
                 animation: pulse 2s infinite ease-in-out;
-            }
-            h1 {
+            }}
+            h1 {{
                 font-size: 26px;
                 font-weight: 700;
                 margin: 0 0 10px 0;
                 letter-spacing: 0.5px;
-            }
-            .message {
+            }}
+            .message {{
                 font-size: 14px;
                 color: #94a3b8;
                 height: 20px;
                 margin-bottom: 30px;
-            }
-            .spinner {
+            }}
+            .spinner {{
                 width: 35px;
                 height: 35px;
                 border: 3px solid rgba(255, 255, 255, 0.1);
@@ -237,29 +262,29 @@ if __name__ == "__main__":
                 border-radius: 50%;
                 animation: spin 0.8s linear infinite;
                 margin: 0 auto;
-            }
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            @keyframes pulse {
-                0%, 100% { transform: scale(1); opacity: 1; }
-                50% { transform: scale(1.05); opacity: 0.85; }
-            }
-            .welcome-screen {
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+            @keyframes pulse {{
+                0%, 100% {{ transform: scale(1); opacity: 1; }}
+                50% {{ transform: scale(1.05); opacity: 0.85; }}
+            }}
+            .welcome-screen {{
                 opacity: 0;
                 transform: scale(0.95);
                 transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-            .welcome-screen.show {
+            }}
+            .welcome-screen.show {{
                 opacity: 1;
                 transform: scale(1);
-            }
+            }}
         </style>
     </head>
     <body>
         <div class="container" id="main-container">
-            <img src="assets/logo.ico" alt="Logo EasyFacture" class="logo" onerror="this.style.display='none'">
+            {logo_img_tag}
             <h1>EasyFacture</h1>
             <div class="message" id="loading-msg">Préparation de votre espace de travail...</div>
             <div class="spinner" id="spinner"></div>
@@ -276,18 +301,18 @@ if __name__ == "__main__":
             let msgIndex = 0;
             const msgElement = document.getElementById("loading-msg");
 
-            const msgInterval = setInterval(() => {
+            const msgInterval = setInterval(() => {{
                 msgIndex++;
-                if (msgIndex < messages.length) {
+                if (msgIndex < messages.length) {{
                     msgElement.textContent = messages[msgIndex];
-                } else {
+                }} else {{
                     clearInterval(msgInterval);
-                }
-            }, 800);
+                }}
+            }}, 800);
 
-            function checkServer() {
-                fetch("http://localhost:9876", { mode: 'no-cors' })
-                    .then(() => {
+            function checkServer() {{
+                fetch("http://localhost:9876", {{ mode: 'no-cors' }})
+                    .then(() => {{
                         clearInterval(msgInterval);
                         msgElement.textContent = "Bienvenue ! 🎉";
                         document.getElementById("spinner").style.display = "none";
@@ -295,14 +320,14 @@ if __name__ == "__main__":
                         document.getElementById("main-container").classList.add("welcome-screen");
                         document.getElementById("main-container").classList.add("show");
 
-                        setTimeout(() => {
+                        setTimeout(() => {{
                             window.location.replace("http://localhost:9876");
-                        }, 500);
-                    })
-                    .catch(() => {
+                        }}, 500);
+                    }})
+                    .catch(() => {{
                         setTimeout(checkServer, 400);
-                    });
-            }
+                    }});
+            }}
 
             setTimeout(checkServer, 1000);
         </script>
@@ -315,7 +340,6 @@ if __name__ == "__main__":
     with open(loading_file_path, "w", encoding="utf-8") as f:
         f.write(loading_html)
 
-    # Calcul dynamique de la taille (90% de l'écran) et centrage avec marges
     import ctypes
     user32 = ctypes.windll.user32
     user32.SetProcessDPIAware()
@@ -339,10 +363,8 @@ if __name__ == "__main__":
         )
         webview.start()
     except Exception as e:
-        # Solution de secours ultime : si le webview natif plante, on ouvre l'app dans le navigateur par défaut
         import webbrowser
         webbrowser.open("http://localhost:9876")
-        # On garde le processus serveur actif
         if server_process:
             server_process.wait()
 

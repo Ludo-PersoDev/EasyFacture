@@ -3,6 +3,7 @@ import subprocess
 from datetime import datetime
 from nicegui import ui
 import database
+from ui_helpers import afficher_note_importante
 
 # CSS pour masquer proprement la colonne de sélection Quasar dans tous les tableaux
 ui.add_head_html('''
@@ -15,7 +16,24 @@ ui.add_head_html('''
 ''')
 
 def render_clients():
-    ui.label("Gestion des Clients").classes("text-2xl font-bold text-slate-800 mb-6")
+    with ui.row().classes("w-full justify-between items-center mb-6"):
+        ui.label("Gestion des Clients").classes("text-2xl font-bold text-slate-800 mb-6")
+        ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
+                "Points d'attention - Fichier Clients",
+                [
+                    "Pour un professionnel, indiquez le nom de l'entreprise ; pour un particulier, le nom et le prénom.",
+                    "L'adresse de facturation est obligatoire car elle figurera sur tous vos documents officiels.",
+                    "L'e-mail de contact est indispensable pour l'envoi automatisé de vos devis et factures.",
+                    "Une fois un client rattaché à une facture validée, ses coordonnées sont figées pour la comptabilité."
+                ],
+                tuto_titre="Tuto : Tarifs, Multi-sites & Options de facturation",
+                tuto_etapes=[
+                    "• Gestion des prix par client : Associez des grilles tarifaires ou des prix spécifiques directement dans la fiche client.",
+                    "• Gestion multi-sites : Rattachez plusieurs adresses de chantiers ou de livraison à une même entreprise cliente pour faciliter la facturation par site.",
+                    "• Choix du détail de facture : Définissez l'affichage souhaité (facture agrégée ou ultra-détaillée par prestation).",
+                    "• Bouton Récapitulatif : Permet de générer un état consolidé de l'activité du client sur la période avant facturation."
+                ]
+            )).props("flat color=amber")
 
     with ui.card().classes("w-full p-6 bg-white border border-slate-200 rounded-xl space-y-6"):
 

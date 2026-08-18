@@ -3,24 +3,28 @@ import multiprocessing
 import os
 import sys
 
+log_file = open("app.log", "a", encoding="utf-8")
+sys.stdout = log_file
+sys.stderr = log_file
+
 # --- CAPTURE DES ERREURS POUR L'EXE ---
 if getattr(sys, "frozen", False):
-  log_path = os.path.join(os.path.dirname(sys.executable), "erreur_fatale.txt")
-  sys.stdout = open(log_path, "w", encoding="utf-8")
-  sys.stderr = open(log_path, "w", encoding="utf-8")
+    log_path = os.path.join(os.path.dirname(sys.executable), "erreur_fatale.txt")
+    sys.stdout = open(log_path, "w", encoding="utf-8")
+    sys.stderr = open(log_path, "w", encoding="utf-8")
 else:
-  if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-  if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
 
 if __name__ == "__main__":
-  multiprocessing.freeze_support()
+    multiprocessing.freeze_support()
 
 if getattr(sys, "frozen", False):
-  application_path = os.path.dirname(sys.executable)
+    application_path = os.path.dirname(sys.executable)
 else:
-  application_path = os.path.dirname(os.path.abspath(__file__))
+    application_path = os.path.dirname(os.path.abspath(__file__))
 
 os.chdir(application_path)
 sys.path.insert(0, application_path)
@@ -39,9 +43,8 @@ from ui_parametres import render_parametres
 from ui_passerelle import render_passerelle_export
 from ui_prestations import render_prestations
 
-database.initialiser_bdd()
 
-# --- ROUTE API FASTAPI POUR SERVIR LES PDF PROPREMENT ---
+
 @app.get('/pdf/{filepath:path}')
 def serve_pdf(filepath: str):
     full_path = os.path.join(os.getcwd(), "Export", filepath)
@@ -49,7 +52,6 @@ def serve_pdf(filepath: str):
         return FileResponse(full_path, media_type='application/pdf')
     return 'Fichier introuvable', 404
 
-# --- SAUVEGARDE PROPRE AU DÉMARRAGE DU SERVEUR ---
 @app.on_startup
 def startup_backup():
     try:
@@ -60,67 +62,127 @@ def startup_backup():
 
 os.makedirs("assets", exist_ok=True)
 app.add_static_files("/assets", "assets")
+database.initialiser_bdd()
 
 current_page = "Accueil"
 
 def set_page(page_name: str):
-  global current_page
-  current_page = page_name
-  content_area.refresh()
+    global current_page
+    current_page = page_name
+    content_area.refresh()
 
 def render_odoo_home():
-  with ui.column().classes("w-full items-center justify-center py-6 gap-8"):
-    with ui.column().classes("items-center gap-2 text-center"):
-      ui.label("Bienvenue sur EasyFacture").classes("text-3xl font-extrabold text-slate-800")
-      ui.label("Sélectionnez un module pour commencer").classes("text-slate-500 text-sm")
+    niveau = database.verifier_progression_onboarding()
+    
+    with ui.column().classes("w-full items-center justify-center py-6 gap-8"):
+        with ui.column().classes("items-center gap-2 text-center max-w-xl"):
+            ui.label("Bienvenue sur EasyFacture").classes("text-3xl font-extrabold text-slate-800")
+            
+            if niveau == 1:
+                ui.label("⚠️ Étape 1 : Configuration de l'entreprise requise").classes("text-amber-600 font-bold")
+                ui.label("Veuillez renseigner les informations de votre entreprise dans les paramètres pour commencer.").classes("text-slate-500 text-sm")
+                
+                # --- LE MESSAGE DE RESTAURATION DIRECTEMENT ICI ---
+                with ui.column().classes("w-full bg-blue-50 p-3 rounded-lg border border-blue-200 gap-1 mt-3 text-center"):
+                    ui.label("💡 Restauration de données").classes("text-xs font-bold text-blue-800")
+                    ui.label("IMPORTANT : Dans le cas d'une restauration de données, vous pourrez récupérer vos sauvegardes dès que votre SIRET et votre Raison Sociale seront renseignés.").classes("text-xs text-blue-700")
 
-    modules = [
-        ("build", "Infos de mon entreprise", "slate", "Configuration/modification de mon entreprise"),
-        ("groups", "Clients", "teal", "Fichier clients & grille tarifaire"),
-        ("list_alt", "Catalogue", "orange", "Liste des prestations & formations"),
-        ("description", "Devis", "blue", "Gestion et conversion des devis"),
-        ("event_available", "Suivi des prestations réalisées", "emerald", "Saisie et suivi des prestations"),
-        ("receipt", "Factures", "violet", "Facturation & avoirs"),
-        ("bar_chart", "CRM & Analytics", "indigo", "Suivi du CA et statistiques"),
-        ("cloud_upload", "Passerelle Factur-X", "sky", "Export et envoi des PDF vers la plateforme"),
-        ("settings_backup_restore", "Sauvegarde & Maintenance", "zinc", "Export/Import de la BDD et transfert PC"),
-    ]
+            elif niveau == 2:
+                ui.label("⚠️ Étape 2 : Votre catalogue de prestations est vide").classes("text-orange-600 font-bold")
+                ui.label("Veuillez ajouter vos prestations ou formations dans le Catalogue avant de pouvoir créer des clients.").classes("text-slate-500 text-sm")
+            elif niveau == 3:
+                ui.label("⚠️ Étape 3 : Aucun client enregistré").classes("text-teal-600 font-bold")
+                ui.label("Veuillez ajouter au moins un client pour pouvoir commencer à réaliser des devis et factures.").classes("text-slate-500 text-sm")
+            else:
+                ui.label("Sélectionnez un module pour commencer").classes("text-slate-500 text-sm")
 
-    with ui.grid(columns=3).classes("gap-6 max-w-5xl w-full px-4"):
-      for icon, title, color, desc in modules:
-        with ui.card().classes(
-            "p-6 cursor-pointer hover:shadow-lg transition-all duration-200"
-            " border border-slate-200 flex flex-col items-center text-center"
-            " gap-3 bg-white hover:-translate-y-1"
-        ).on("click", lambda t=title: set_page(t)):
-          ui.icon(icon, size="2.5rem").classes(f"text-{color}-600")
-          ui.label(title).classes("font-bold text-lg text-slate-800")
-          ui.label(desc).classes("text-xs text-slate-500")
+        modules = [
+            ("build", "Infos de mon entreprise", "slate", "Configuration/modification de mon entreprise", 1),
+            ("groups", "Clients", "teal", "Fichier clients & grille tarifaire", 3),
+            ("list_alt", "Catalogue", "orange", "Liste des prestations & formations", 2),
+            ("description", "Devis", "blue", "Gestion et conversion des devis", 4),
+            ("event_available", "Suivi des prestations réalisées", "emerald", "Saisie et suivi des prestations", 4),
+            ("receipt", "Factures", "violet", "Facturation & avoirs", 4),
+            ("bar_chart", "CRM & Analytics", "indigo", "Suivi du CA et statistiques", 4),
+            ("cloud_upload", "Passerelle Factur-X", "sky", "Export et envoi des PDF vers la plateforme", 4),
+            ("settings_backup_restore", "Sauvegarde & Maintenance", "zinc", "Export/Import de la BDD et transfert PC", 2), # Verrouillé tant que l'entreprise n'est pas configurée
+        ]
+
+        with ui.grid(columns=3).classes("gap-6 max-w-5xl w-full px-4"):
+            for icon, title, color, desc, niveau_requis in modules:
+                is_module_blocked = niveau < niveau_requis
+                
+                card = ui.card().classes("p-6 cursor-pointer hover:shadow-lg transition-all duration-200 border border-slate-200 flex flex-col items-center text-center gap-3 bg-white hover:-translate-y-1")
+                if is_module_blocked:
+                    card.classes("opacity-50 cursor-not-allowed")
+                    if niveau == 1:
+                        msg = "Veuillez d'abord configurer votre entreprise dans les paramètres."
+                    elif niveau == 2:
+                        msg = "Veuillez d'abord ajouter des prestations dans le Catalogue."
+                    else:
+                        msg = "Veuillez d'abord enregistrer au moins un client."
+                    card.on("click", lambda m=msg: ui.notify(m, type="warning"))
+                else:
+                    card.on("click", lambda t=title: set_page(t))
+                with card:
+                    ui.icon(icon, size="2.5rem").classes(f"text-{color}-600")
+                    ui.label(title).classes("font-bold text-lg text-slate-800")
+                    ui.label(desc).classes("text-xs text-slate-500")
 
 @ui.refreshable
 def content_area():
-  if current_page == "Accueil":
-    render_odoo_home()
-  elif current_page == "CRM & Analytics":
-    render_analytics()
-  elif current_page == "Passerelle Factur-X":
-    render_passerelle_export()
-  elif current_page in ["Infos de mon entreprise", "Paramètres"]:
-    render_parametres()
-  elif current_page == "Catalogue":
-    render_prestations()
-  elif current_page == "Clients":
-    render_clients()
-  elif current_page == "Devis":
-    render_devis()
-  elif current_page in ["Interventions", "Suivi des prestations réalisées"]:
-    render_interventions()
-  elif current_page == "Factures":
-    render_factures()
-  elif current_page in ["Maintenance", "Sauvegarde & Maintenance"]:
-    render_maintenance()
-  else:
-    render_fallback()
+    niveau = database.verifier_progression_onboarding()
+    
+    message_blocage = ""
+    redirection_cible = "Infos de mon entreprise"
+    
+    # Niveau 1 bloque tout sauf Paramètres
+    if niveau == 1 and current_page not in ["Infos de mon entreprise", "Paramètres"]:
+        message_blocage = "Veuillez terminer la configuration de votre entreprise."
+        redirection_cible = "Infos de mon entreprise"
+    elif niveau == 2 and current_page in ["Clients", "Devis", "Factures", "Interventions", "Suivi des prestations réalisées", "CRM & Analytics", "Passerelle Factur-X"]:
+        message_blocage = "Veuillez d'abord renseigner votre catalogue de prestations."
+        redirection_cible = "Catalogue"
+    elif niveau == 3 and current_page in ["Devis", "Factures", "Interventions", "Suivi des prestations réalisées", "CRM & Analytics", "Passerelle Factur-X"]:
+        message_blocage = "Veuillez d'abord enregistrer au moins un client."
+        redirection_cible = "Clients"
+        
+    if message_blocage and current_page != "Accueil":
+        with ui.column().classes("w-full items-center justify-center p-10 gap-2"):
+            ui.icon("lock", size="4rem", color="slate-400")
+            ui.label("Accès restreint").classes("text-xl font-bold")
+            ui.label(message_blocage).classes("text-slate-500")
+            
+            if niveau == 1:
+                with ui.column().classes("w-full max-w-lg bg-blue-50 p-4 rounded-lg border border-blue-200 gap-1 mt-3 text-center"):
+                    ui.label("💡 Restauration de données").classes("text-xs font-bold text-blue-800")
+                    ui.label("IMPORTANT : Dans le cas d'une restauration de données, vous pourrez récupérer vos sauvegardes dès que votre SIRET et votre Raison Sociale seront renseignés.").classes("text-xs text-blue-700")
+
+            ui.button("Continuer le parcours", on_click=lambda target=redirection_cible: set_page(target)).classes("mt-4")
+        return
+
+    if current_page == "Accueil":
+        render_odoo_home()
+    elif current_page == "CRM & Analytics":
+        render_analytics()
+    elif current_page == "Passerelle Factur-X":
+        render_passerelle_export()
+    elif current_page in ["Infos de mon entreprise", "Paramètres"]:
+        render_parametres()
+    elif current_page == "Catalogue":
+        render_prestations()
+    elif current_page == "Clients":
+        render_clients()
+    elif current_page == "Devis":
+        render_devis()
+    elif current_page in ["Interventions", "Suivi des prestations réalisées"]:
+        render_interventions()
+    elif current_page == "Factures":
+        render_factures()
+    elif current_page in ["Maintenance", "Sauvegarde & Maintenance"]:
+        render_maintenance()
+    else:
+        render_fallback()
 
 def render_fallback():
   with ui.column().classes("gap-4"):

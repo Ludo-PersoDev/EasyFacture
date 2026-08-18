@@ -14,7 +14,7 @@ DB_FILENAME = 'FactureX.db'
 MAX_BACKUPS = 8
 
 # ID de ton dossier Google Drive principal
-GOOGLE_DRIVE_FOLDER_ID = '1Aeo7n-u4zbbTjzrZG1-s7f9dM8N37eeI'
+GOOGLE_DRIVE_FOLDER_ID = '1mI8BWRK6A4e1lDwwLmcXTUYrCBeJ3NOh'
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 
@@ -196,17 +196,28 @@ def lancer_sauvegarde_automatique():
     if os.path.exists(chemin_zip):
       os.remove(chemin_zip)
 
-    # Création du ZIP local
+    # Création du ZIP local (BDD + Exports/Export + Assets)
     with zipfile.ZipFile(chemin_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-      if os.path.exists(DB_FILENAME):
-        zipf.write(DB_FILENAME, arcname=DB_FILENAME)
+        # 1. La base de données
+        if os.path.exists(DB_FILENAME):
+            zipf.write(DB_FILENAME, arcname=DB_FILENAME)
 
-      if os.path.exists('exports'):
-        for root, _, files in os.walk('exports'):
-          for file in files:
-            full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, '.')
-            zipf.write(full_path, arcname=rel_path)
+        # 2. Le dossier Export ou exports (selon le nom exact sur ton disque)
+        dossier_export = 'Export' if os.path.exists('Export') else 'exports'
+        if os.path.exists(dossier_export):
+            for root, _, files in os.walk(dossier_export):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, '.')
+                    zipf.write(full_path, arcname=rel_path)
+
+        # 3. Le dossier assets (pour le logo)
+        if os.path.exists('assets'):
+            for root, _, files in os.walk('assets'):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, '.')
+                    zipf.write(full_path, arcname=rel_path)
 
     # Envoi sur ton Google Drive (écrase automatiquement l'ancien fichier du même nom)
     upload_to_google_drive(chemin_zip)

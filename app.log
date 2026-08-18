@@ -1,0 +1,157 @@
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+Traceback (most recent call last):
+  File "C:\FacturEx\app.py", line 44, in <module>
+    from ui_prestations import render_prestations
+  File "C:\FacturEx\ui_prestations.py", line 4, in <module>
+    import walkthrough_manager
+ModuleNotFoundError: No module named 'walkthrough_manager'
+Traceback (most recent call last):
+  File "C:\FacturEx\app.py", line 44, in <module>
+    from ui_prestations import render_prestations
+  File "C:\FacturEx\ui_prestations.py", line 4, in <module>
+    import walkthrough_manager
+ModuleNotFoundError: No module named 'walkthrough_manager'
+Traceback (most recent call last):
+  File "C:\FacturEx\app.py", line 44, in <module>
+    from ui_prestations import render_prestations
+  File "C:\FacturEx\ui_prestations.py", line 4, in <module>
+    import walkthrough_manager
+ModuleNotFoundError: No module named 'walkthrough_manager'
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'render_parametres' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\background_tasks.py", line 152, in _handle_exceptions
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\awaitable_response.py", line 27, in _fire
+    self.fire_and_forget()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 100, in fire_and_forget
+    if awaitables := self._execute_refresh(args, kwargs, instance=instance):
+                     ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 119, in _execute_refresh
+    result = target.run(self.func)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 38, in run
+    result = func(*self.args, **self.kwargs)
+  File "C:\FacturEx\app.py", line 171, in content_area
+    render_parametres()
+    ^^^^^^^^^^^^^^^^^
+NameError: name 'render_parametres' is not defined. Did you mean: 'render_analytics'?
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'walkthrough_manager' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\background_tasks.py", line 152, in _handle_exceptions
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\awaitable_response.py", line 27, in _fire
+    self.fire_and_forget()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 100, in fire_and_forget
+    if awaitables := self._execute_refresh(args, kwargs, instance=instance):
+                     ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 119, in _execute_refresh
+    result = target.run(self.func)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 38, in run
+    result = func(*self.args, **self.kwargs)
+  File "C:\FacturEx\app.py", line 173, in content_area
+    render_prestations()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\FacturEx\ui_prestations.py", line 204, in render_prestations
+    walkthrough_manager.verifier_et_lancer("catalogue")
+    ^^^^^^^^^^^^^^^^^^^
+NameError: name 'walkthrough_manager' is not defined
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'walkthrough_manager' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\background_tasks.py", line 152, in _handle_exceptions
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\awaitable_response.py", line 27, in _fire
+    self.fire_and_forget()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 100, in fire_and_forget
+    if awaitables := self._execute_refresh(args, kwargs, instance=instance):
+                     ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 119, in _execute_refresh
+    result = target.run(self.func)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 38, in run
+    result = func(*self.args, **self.kwargs)
+  File "C:\FacturEx\app.py", line 173, in content_area
+    render_prestations()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\FacturEx\ui_prestations.py", line 204, in render_prestations
+    walkthrough_manager.verifier_et_lancer("catalogue")
+    ^^^^^^^^^^^^^^^^^^^
+NameError: name 'walkthrough_manager' is not defined
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'afficher_note_importante' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\events.py", line 479, in handle_event
+    result = cast(Callable[[], Any], handler)()
+  File "C:\FacturEx\ui_clients.py", line 20, in <lambda>
+    ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
+                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'afficher_note_importante' is not defined
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'walkthrough_manager' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\background_tasks.py", line 152, in _handle_exceptions
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\awaitable_response.py", line 27, in _fire
+    self.fire_and_forget()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 100, in fire_and_forget
+    if awaitables := self._execute_refresh(args, kwargs, instance=instance):
+                     ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 119, in _execute_refresh
+    result = target.run(self.func)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 38, in run
+    result = func(*self.args, **self.kwargs)
+  File "C:\FacturEx\app.py", line 173, in content_area
+    render_prestations()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\FacturEx\ui_prestations.py", line 204, in render_prestations
+    walkthrough_manager.verifier_et_lancer("catalogue")
+    ^^^^^^^^^^^^^^^^^^^
+NameError: name 'walkthrough_manager' is not defined
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'walkthrough_manager' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\background_tasks.py", line 152, in _handle_exceptions
+    task.result()
+    ~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\awaitable_response.py", line 27, in _fire
+    self.fire_and_forget()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 100, in fire_and_forget
+    if awaitables := self._execute_refresh(args, kwargs, instance=instance):
+                     ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 119, in _execute_refresh
+    result = target.run(self.func)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\refreshable.py", line 38, in run
+    result = func(*self.args, **self.kwargs)
+  File "C:\FacturEx\app.py", line 173, in content_area
+    render_prestations()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "C:\FacturEx\ui_prestations.py", line 204, in render_prestations
+    walkthrough_manager.verifier_et_lancer("catalogue")
+    ^^^^^^^^^^^^^^^^^^^
+NameError: name 'walkthrough_manager' is not defined
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+name 'afficher_note_importante' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\events.py", line 479, in handle_event
+    result = cast(Callable[[], Any], handler)()
+  File "C:\FacturEx\ui_maintenance.py", line 32, in <lambda>
+    ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
+                                                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'afficher_note_importante' is not defined
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876

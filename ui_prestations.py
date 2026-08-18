@@ -1,11 +1,22 @@
 from nicegui import ui
 import database
+from ui_helpers import afficher_note_importante
 
 def render_prestations():
     params = database.recuperer_parametres()
     entreprise_exoneree = bool(params.get("tva_exoneree", 1))
 
-    ui.label("Catalogue des Prestations").classes("text-2xl font-bold text-slate-800 mb-6")
+    with ui.row().classes("w-full justify-between items-center mb-6"):
+        ui.label("Catalogue des Prestations").classes("text-2xl font-bold text-slate-800")
+        ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
+    "Points d'attention - Catalogue",
+    [
+        "La TVA est désactivée automatiquement si vous êtes en franchise en base (Micro-entreprise).",
+        "Une fois une facture générée, les taux de TVA sont figés : vérifiez bien vos paramètres avant !",
+        "L'unité (Heure/Forfait) doit être cohérente pour faciliter votre suivi de prestation plus tard.",
+        "Une prestation modifiée ne rétroagit pas sur les factures déjà créées."
+    ]
+)).props("flat color=amber")
 
     with ui.card().classes("w-full p-6 bg-white border border-slate-200 rounded-xl space-y-6"):
 
@@ -34,13 +45,13 @@ def render_prestations():
 
             with table_container:
                 with ui.row().classes("w-full justify-between items-center mb-4 gap-4"):
-                    search_input = ui.input(placeholder="Rechercher une prestation...").props('dense outlined icon="search"').classes("w-72")
-                    ui.button("Nouvelle Prestation", icon="add", on_click=lambda: ouvrir_dialogue_edition()).props("color=primary")
+                    search_input = ui.input(placeholder="Rechercher une prestation...").props('dense outlined icon="search"').classes("w-72").props('id="step-catalogue-search"')
+                    ui.button("Nouvelle Prestation", icon="add", on_click=lambda: ouvrir_dialogue_edition()).props("color=primary").props('id="step-catalogue-new"')
 
                 if not prestations:
                     ui.label("Aucune prestation dans le catalogue pour le moment.").classes("text-slate-400 italic py-4")
                 else:
-                    grid = ui.table(columns=columns, rows=prestations, row_key='id', selection='single', pagination=10).classes("w-full cursor-pointer no-checkbox-table")
+                    grid = ui.table(columns=columns, rows=prestations, row_key='id', selection='single', pagination=10).classes("w-full cursor-pointer no-checkbox-table").props('id="step-catalogue-table"')
                     grid.props('flat borderless hide-selection-color')
 
                     search_input.on_value_change(lambda e: grid.set_filter(e.value))
@@ -188,3 +199,6 @@ def render_prestations():
             dialog.open()
 
         rafraichir_liste()
+
+    # Déclenchement automatique du didacticiel si non fait
+    walkthrough_manager.verifier_et_lancer("catalogue")

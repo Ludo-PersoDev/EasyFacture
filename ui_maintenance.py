@@ -11,6 +11,10 @@ import version
 import subprocess
 import sys
 import io
+from nicegui import ui
+from ui_helpers import afficher_note_importante
+
+CODE_PIN_SECRET = "1296"
 
 # Import du module Google Drive
 try:
@@ -22,9 +26,23 @@ DB_FILENAME = "FactureX.db"
 
 
 def render_maintenance():
-    ui.label("Sauvegarde & Maintenance").classes(
-        "text-2xl font-bold text-slate-800 mb-6"
-    )
+    with ui.row().classes("w-full justify-between items-center mb-6"):
+        ui.label("Sauvegarde & Maintenance").classes(
+            "text-2xl font-bold text-slate-800 mb-6"
+        )
+        ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
+                "Points d'attention - Sauvegarde & Maintenance",
+                [
+                    "Les sauvegardes automatiques sont effectuées en arrière-plan pour protéger vos données en continu.",
+                    "En cas de changement de poste, veillez à bien récupérer votre dernière base de données et vos documents.",
+                ],
+                tuto_titre="Tuto : Restauration & Transfert de PC",
+                tuto_etapes=[
+                    "• Sauvegarde manuelle : Utilisez l'outil d'export pour générer une archive complète de votre base de données et de vos assets.",
+                    "• Restauration : Importez votre fichier de sauvegarde. Pour rappel, les options de restauration se débloquent une fois le SIRET et la Raison Sociale renseignés.",
+                    "• Transfert sur un nouveau PC : Installez l'application, configurez vos identités d'entreprise (étape 1 obligatoire), puis procédez à l'import de votre base de données."
+                ]
+            )).props("flat color=amber")
 
     # --- 1. EMPLACEMENT DES SAUVEGARDES AUTOMATIQUES ---
     with ui.card().classes(
@@ -119,15 +137,27 @@ def render_maintenance():
                             if os.path.exists(zip_filename):
                                 os.remove(zip_filename)
 
-                            with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
+                            # Création du ZIP local (BDD + Exports/Export + Assets)
+                            with zipfile.ZipFile(chemin_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                                # 1. La base de données
                                 if os.path.exists(DB_FILENAME):
                                     zipf.write(DB_FILENAME, arcname=DB_FILENAME)
 
-                                if os.path.exists("exports"):
-                                    for root, dirs, files in os.walk("exports"):
+                                # 2. Le dossier Export ou exports (selon le nom exact sur ton disque)
+                                dossier_export = 'Export' if os.path.exists('Export') else 'exports'
+                                if os.path.exists(dossier_export):
+                                    for root, _, files in os.walk(dossier_export):
                                         for file in files:
                                             full_path = os.path.join(root, file)
-                                            rel_path = os.path.relpath(full_path, ".")
+                                            rel_path = os.path.relpath(full_path, '.')
+                                            zipf.write(full_path, arcname=rel_path)
+
+                                # 3. Le dossier assets (pour le logo)
+                                if os.path.exists('assets'):
+                                    for root, _, files in os.walk('assets'):
+                                        for file in files:
+                                            full_path = os.path.join(root, file)
+                                            rel_path = os.path.relpath(full_path, '.')
                                             zipf.write(full_path, arcname=rel_path)
 
                             ui.notify("Sauvegarde locale créée avec succès !", type="positive")
@@ -524,3 +554,117 @@ def render_maintenance():
             with ui.column().classes("items-end"):
                 ui.label("Powered by").classes("text-[10px] text-slate-400 uppercase tracking-wider font-semibold")
                 ui.label("FacturEx by LuA").classes("text-sm font-extrabold text-primary")
+                
+    # --- 4. ZONE DE DEBUG ---
+    render_maintenance_debug_section()
+    
+def render_maintenance_debug_section():
+    with ui.card().classes("w-full p-6 space-y-4 border border-slate-200 rounded-xl bg-slate-50/50"):
+        ui.label("🛠️ Zone de Développement & Debug").classes("text-lg font-bold text-slate-800")
+        
+        debug_container = ui.column().classes("w-full space-y-3")
+        
+        with debug_container:
+            ui.label("Accès réservé au développeur pour le diagnostic et les tests.").classes("text-sm text-slate-500")
+            
+            pin_input = ui.input("Code PIN Débug", password=True, password_toggle_button=True).props("dense outlined").classes("w-64")
+            
+            def verifier_code():
+                if pin_input.value == CODE_PIN_SECRET:
+                    ui.notify("Mode Debug activé avec succès !", type="positive", icon="lock_open")
+                    debug_container.clear()
+                    with debug_container:
+                        ui.badge("Mode Debug ACTIF").props("color=positive font-bold text-sm").classes("p-2")
+                        ui.label("Options de debug disponibles :").classes("font-semibold text-slate-700 mt-2")
+                        
+                        # --- ACTION 1 : PURGER LES CACHES ---
+                        def purger_caches():
+                            compteur = 0
+                            try:
+                                for root, dirs, files in os.walk(os.path.dirname(os.path.abspath(__file__))):
+                                    for d in dirs:
+                                        if d == "__pycache__":
+                                            chem_cache = os.path.join(root, d)
+                                            shutil.rmtree(chem_cache, ignore_errors=True)
+                                            compteur += 1
+                                    for file in files:
+                                        if file.endswith(".pyc"):
+                                            os.remove(os.path.join(root, file))
+                                ui.notify(f"Succès : {compteur} dossier(s) __pycache__ purgé(s) !", type="positive", icon="cleaning_services")
+                            except Exception as e:
+                                ui.notify(f"Erreur lors de la purge : {e}", type="negative")
+
+                        # --- ACTION 2 : AFFICHER LES LOGS STOCKÉS ---
+                        def afficher_logs():
+                            with ui.dialog() as dlg, ui.card().classes("w-[700px] p-6 space-y-3"):
+                                ui.label("📜 Logs de l'Application & Launcher").classes("text-lg font-bold text-slate-800 border-b pb-2")
+                                
+                                log_path = "app.log"
+                                contenu_logs = "Aucun fichier de log trouvé. (Vérifie que la redirection des flux est active dans app.py)"
+                                
+                                if os.path.exists(log_path):
+                                    try:
+                                        with open(log_path, "r", encoding="utf-8") as f:
+                                            lignes = f.readlines()
+                                            # On garde les 100 dernières lignes pour ne pas surcharger
+                                            contenu_logs = "".join(lignes[-100:])
+                                    except Exception as ex:
+                                        contenu_logs = f"Erreur lecture des logs : {ex}"
+
+                                ui.textarea(value=contenu_logs).props("readonly outlined").classes("w-full h-80 font-mono text-xs bg-slate-900 text-emerald-400")
+
+                                with ui.row().classes("w-full justify-between items-center mt-4"):
+                                    def effacer_logs():
+                                        try:
+                                            with open(log_path, "w", encoding="utf-8") as f:
+                                                f.write("")
+                                            ui.notify("Logs effacés !", type="info")
+                                            dlg.close()
+                                        except Exception as e:
+                                            ui.notify(f"Erreur : {e}", type="negative")
+
+                                    ui.button("Vider les logs", icon="delete", on_click=effacer_logs).props("flat color=negative")
+                                    ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
+                            dlg.open()
+
+                        # --- ACTION 3 : DIAGNOSTIC & FICHIERS ---
+                        def afficher_infos_debug():
+                            with ui.dialog() as dlg, ui.card().classes("w-[600px] p-6 space-y-3"):
+                                ui.label("📊 Diagnostic de l'Environnement").classes("text-lg font-bold text-slate-800 border-b pb-2")
+                                
+                                python_version = sys.version
+                                encoding_actuel = sys.stdout.encoding if sys.stdout else "Inconnu"
+                                base_dir = os.path.dirname(os.path.abspath(__file__))
+                                
+                                ui.label(f"• Répertoire de travail : {base_dir}").classes("text-xs text-slate-600 font-mono")
+                                ui.label(f"• Version Python : {python_version}").classes("text-xs text-slate-600 font-mono")
+                                
+                                ui.label("Derniers fichiers modifiés dans le projet :").classes("font-semibold text-sm text-slate-700 mt-2")
+                                
+                                fichiers_recents = []
+                                try:
+                                    for f in os.listdir(base_dir):
+                                        if f.endswith(".py") or f.endswith(".pyw"):
+                                            path_f = os.path.join(base_dir, f)
+                                            mtime = os.path.getmtime(path_f)
+                                            fichiers_recents.append((f, datetime.fromtimestamp(mtime)))
+                                    
+                                    fichiers_recents.sort(key=lambda x: x[1], reverse=True)
+                                    for nom_f, dt in fichiers_recents[:5]:
+                                        ui.label(f"- {nom_f} (Modifié le : {dt.strftime('%d/%m/%Y %H:%M:%S')})").classes("text-xs text-slate-500 font-mono")
+                                except Exception:
+                                    ui.label("Impossible de lister les fichiers récents.").classes("text-xs text-red-500")
+
+                                with ui.row().classes("w-full justify-end mt-4"):
+                                    ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
+                            dlg.open()
+
+                        # Boutons de la zone debug
+                        with ui.row().classes("gap-2 flex-wrap"):
+                            ui.button("Purger __pycache__", icon="cleaning_services", on_click=purger_caches).props("dense outline color=warning font-bold")
+                            ui.button("Afficher les logs", icon="terminal", on_click=afficher_logs).props("dense outline color=info font-bold")
+                            ui.button("Diagnostic fichiers", icon="bug_report", on_click=afficher_infos_debug).props("dense outline color=primary font-bold")
+                else:
+                    ui.notify("Code PIN incorrect.", type="negative", icon="error")
+
+            ui.button("Déverrouiller", icon="lock_open", on_click=verifier_code).props("color=primary font-bold dense")

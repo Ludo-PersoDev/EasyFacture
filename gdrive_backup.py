@@ -8,6 +8,9 @@ io_import = __import__('io')
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
+# ID de ton dossier Google Drive principal dédié aux backups
+GOOGLE_DRIVE_FOLDER_ID = '1mI8BWRK6A4e1lDwwLmcXTUYrCBeJ3NOh'
+
 def get_drive_service():
     """Authentifie et retourne le service Google Drive."""
     creds = None
@@ -31,12 +34,13 @@ def nettoyer_siret(siret_brut: str) -> str:
     return re.sub(r'\D', '', str(siret_brut))
 
 def obtenir_ou_creer_dossier_siret(service, siret):
-    """Recherche ou crée un dossier sur le Drive basé sur le SIRET strict à 14 chiffres."""
+    """Recherche ou crée un dossier sur le Drive basé sur le SIRET strict à 14 chiffres dans le dossier parent dédié."""
     siret_propre = nettoyer_siret(siret)
     if len(siret_propre) != 14:
         raise ValueError("Le SIRET doit contenir exactement 14 chiffres.")
         
-    query = f"mimeType = 'application/vnd.google-apps.folder' and name = '{siret_propre}' and trashed = false"
+    # Recherche du dossier SIRET à l'intérieur du dossier parent GOOGLE_DRIVE_FOLDER_ID
+    query = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and name = '{siret_propre}' and trashed = false"
     results = service.files().list(q=query, fields="files(id, name)").execute()
     folders = results.get('files', [])
     
@@ -45,32 +49,45 @@ def obtenir_ou_creer_dossier_siret(service, siret):
     else:
         file_metadata = {
             'name': siret_propre,
-            'mimeType': 'application/vnd.google-apps.folder'
+            'mimeType': 'application/vnd.google-apps.folder',
+            'parents': [GOOGLE_DRIVE_FOLDER_ID]
         }
         folder = service.files().create(body=file_metadata, fields='id').execute()
         return folder.get('id')
 
 def pousser_sauvegarde_vers_drive(zip_filename, siret):
-    """Pousse la sauvegarde dans le dossier du SIRET sur le Drive."""
+    """Pousse la sauvegarde, en écrasant l'ancien fichier du même jour s'il existe."""
     service = get_drive_service()
     folder_id = obtenir_ou_creer_dossier_siret(service, siret)
     
+    file_name = os.path.basename(zip_filename)
+    
+    # 1. Rechercher si un fichier avec le même nom existe déjà dans ce dossier
+    query = f"'{folder_id}' in parents and name = '{file_name}' and trashed = false"
+    results = service.files().list(q=query, fields="files(id)").execute()
+    existing_files = results.get('files', [])
+    
+    # 2. Supprimer les fichiers trouvés (écrasement)
+    for f in existing_files:
+        service.files().delete(fileId=f['id']).execute()
+    
+    # 3. Upload du nouveau fichier
     file_metadata = {
-        'name': os.path.basename(zip_filename),
+        'name': file_name,
         'parents': [folder_id]
     }
     media = MediaFileUpload(zip_filename, mimetype='application/zip')
     service.files().create(body=file_metadata, media_body=media, fields='id').execute()
 
 def lister_sauvegardes_drive_par_siret(siret):
-    """Liste uniquement les sauvegardes du dossier correspondant au SIRET."""
+    """Liste uniquement les sauvegardes du dossier correspondant au SIRET dans le répertoire dédié."""
     try:
         siret_propre = nettoyer_siret(siret)
         if len(siret_propre) != 14:
             return []
 
         service = get_drive_service()
-        query_folder = f"mimeType = 'application/vnd.google-apps.folder' and name = '{siret_propre}' and trashed = false"
+        query_folder = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and name = '{siret_propre}' and trashed = false"
         res_folder = service.files().list(q=query_folder, fields="files(id)").execute()
         folders = res_folder.get('files', [])
         
