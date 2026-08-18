@@ -4,6 +4,8 @@ Archivage/
 # Dossiers générés par l'application
 export/
 auto_backups/
+*.log
+erreur_fatale.txt
 
 # JSON pour sécu
 credentials.json

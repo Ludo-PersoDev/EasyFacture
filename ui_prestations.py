@@ -199,6 +199,3 @@ def render_prestations():
             dialog.open()
 
         rafraichir_liste()
-
-    # Déclenchement automatique du didacticiel si non fait
-    walkthrough_manager.verifier_et_lancer("catalogue")

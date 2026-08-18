@@ -2,30 +2,29 @@ from datetime import datetime
 import multiprocessing
 import os
 import sys
+import threading
+from nicegui import run
+from nicegui import app, ui
+import asyncio
+import time
+import subprocess
 
 log_file = open("app.log", "a", encoding="utf-8")
 sys.stdout = log_file
 sys.stderr = log_file
 
-# --- CAPTURE DES ERREURS POUR L'EXE ---
 if getattr(sys, "frozen", False):
     log_path = os.path.join(os.path.dirname(sys.executable), "erreur_fatale.txt")
     sys.stdout = open(log_path, "w", encoding="utf-8")
     sys.stderr = open(log_path, "w", encoding="utf-8")
 else:
-    if sys.stdout is None:
-        sys.stdout = open(os.devnull, "w")
-    if sys.stderr is None:
-        sys.stderr = open(os.devnull, "w")
+    if sys.stdout is None: sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None: sys.stderr = open(os.devnull, "w")
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
-if getattr(sys, "frozen", False):
-    application_path = os.path.dirname(sys.executable)
-else:
-    application_path = os.path.dirname(os.path.abspath(__file__))
-
+application_path = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
 os.chdir(application_path)
 sys.path.insert(0, application_path)
 
@@ -43,7 +42,44 @@ from ui_parametres import render_parametres
 from ui_passerelle import render_passerelle_export
 from ui_prestations import render_prestations
 
+# --- GESTION PROPRE DE LA FERMETURE ---
+def sauvegarder_et_quitter():
+    """Sauvegarde et fermeture totale via purge des processus Python / App"""
+    
+    ui.notify(
+        "Sauvegarde des données et fermeture en cours...", 
+        type="ongoing", 
+        spinner=True, 
+        position="bottom-right",
+        timeout=None
+    )
+    
+    def tache_arriere_plan():
+        try:
+            # 1. Exécution de la sauvegarde Google Drive
+            lancer_sauvegarde_automatique()
+        except Exception as e:
+            print(f"[Erreur Backup Quitter] {e}")
+        
+        import time
+        time.sleep(0.5)
+        
+        # 2. Nettoyage radical par nom de processus et par PID
+        try:
+            # Si on tourne sous forme d'exécutable ou de script python, on cible large pour nettoyer la fenêtre et le serveur
+            if getattr(sys, "frozen", False):
+                nom_executable = os.path.basename(sys.executable)
+                subprocess.Popen(f"taskkill /f /im {nom_executable}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                # En mode dev (python.exe / pythonw.exe), on tue les instances python et le PID courant
+                subprocess.Popen(f"taskkill /f /pid {os.getpid()}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # Optionnel : si le launcher lance pythonw, on peut aussi nettoyer un coup si besoin
+                subprocess.Popen(f"taskkill /f /im pythonw.exe", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[Erreur Taskkill global] {e}")
+            os._exit(0)
 
+    threading.Thread(target=tache_arriere_plan, daemon=True).start()
 
 @app.get('/pdf/{filepath:path}')
 def serve_pdf(filepath: str):
@@ -56,7 +92,7 @@ def serve_pdf(filepath: str):
 def startup_backup():
     try:
         lancer_sauvegarde_automatique()
-        print("[Backup] Sauvegarde Google Drive effectuée avec succès.")
+        print("[Backup] Sauvegarde initiale effectuée.")
     except Exception as e:
         print(f"[Backup Error] {e}")
 
@@ -82,7 +118,6 @@ def render_odoo_home():
                 ui.label("⚠️ Étape 1 : Configuration de l'entreprise requise").classes("text-amber-600 font-bold")
                 ui.label("Veuillez renseigner les informations de votre entreprise dans les paramètres pour commencer.").classes("text-slate-500 text-sm")
                 
-                # --- LE MESSAGE DE RESTAURATION DIRECTEMENT ICI ---
                 with ui.column().classes("w-full bg-blue-50 p-3 rounded-lg border border-blue-200 gap-1 mt-3 text-center"):
                     ui.label("💡 Restauration de données").classes("text-xs font-bold text-blue-800")
                     ui.label("IMPORTANT : Dans le cas d'une restauration de données, vous pourrez récupérer vos sauvegardes dès que votre SIRET et votre Raison Sociale seront renseignés.").classes("text-xs text-blue-700")
@@ -105,7 +140,7 @@ def render_odoo_home():
             ("receipt", "Factures", "violet", "Facturation & avoirs", 4),
             ("bar_chart", "CRM & Analytics", "indigo", "Suivi du CA et statistiques", 4),
             ("cloud_upload", "Passerelle Factur-X", "sky", "Export et envoi des PDF vers la plateforme", 4),
-            ("settings_backup_restore", "Sauvegarde & Maintenance", "zinc", "Export/Import de la BDD et transfert PC", 2), # Verrouillé tant que l'entreprise n'est pas configurée
+            ("settings_backup_restore", "Sauvegarde & Maintenance", "zinc", "Export/Import de la BDD et transfert PC", 2),
         ]
 
         with ui.grid(columns=3).classes("gap-6 max-w-5xl w-full px-4"):
@@ -136,7 +171,6 @@ def content_area():
     message_blocage = ""
     redirection_cible = "Infos de mon entreprise"
     
-    # Niveau 1 bloque tout sauf Paramètres
     if niveau == 1 and current_page not in ["Infos de mon entreprise", "Paramètres"]:
         message_blocage = "Veuillez terminer la configuration de votre entreprise."
         redirection_cible = "Infos de mon entreprise"
@@ -185,24 +219,22 @@ def content_area():
         render_fallback()
 
 def render_fallback():
-  with ui.column().classes("gap-4"):
-    ui.button("← Retour à l'accueil", icon="arrow_back", on_click=lambda: set_page("Accueil")).props("flat color=primary")
-    ui.label(f"Module : {current_page}").classes("text-2xl font-bold text-slate-800")
-    ui.label("Contenu en cours de développement...").classes("text-slate-500")
+    with ui.column().classes("gap-4"):
+        ui.button("← Retour à l'accueil", icon="arrow_back", on_click=lambda: set_page("Accueil")).props("flat color=primary")
+        ui.label(f"Module : {current_page}").classes("text-2xl font-bold text-slate-800")
+        ui.label("Contenu en cours de développement...").classes("text-slate-500")
 
 with ui.header().classes("bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center text-slate-800"):
-  with ui.row().classes("items-center gap-4"):
-    ui.button(icon="grid_view", on_click=lambda: set_page("Accueil")).props("flat round color=primary").tooltip("Menu Principal (Accueil)")
-    ui.label("EasyFacture").classes("font-bold text-lg text-slate-800")
-  ui.badge("v1.5").props("color=slate outline")
+    with ui.row().classes("items-center gap-4"):
+        ui.button(icon="grid_view", on_click=lambda: set_page("Accueil")).props("flat round color=primary").tooltip("Menu Principal (Accueil)")
+        ui.label("EasyFacture").classes("font-bold text-lg text-slate-800")
+    
+    with ui.row().classes("items-center gap-2"):
+        ui.badge("v1.8").props("color=slate outline")
+        ui.button("Quitter", icon="exit_to_app", on_click=sauvegarder_et_quitter).props("flat color=red").classes("ml-4")
 
 with ui.column().classes("w-full p-6 bg-slate-50 min-h-screen"):
-  content_area()
+    content_area()
 
 if __name__ in {"__main__", "__mp_main__"}:
-  ui.run(
-      title="EasyFacture",
-      port=9876,
-      reload=False,
-      show=False,
-  )
+    ui.run(title="EasyFacture", port=9876, reload=False, show=False)
