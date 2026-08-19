@@ -1,49 +1,58 @@
-[Backup Auto] Envoi de auto_backups\EasyFacture_2026-08-18.zip sur ton Google Drive...
-[Backup Auto] Fichier EasyFacture_2026-08-18.zip envoyé avec succès dans ton dossier Drive (SIRET : 12345678912345).
-[Backup Auto] Envoi de auto_backups\EasyFacture_2026-08-18.zip sur ton Google Drive...
-[Backup Auto] Fichier EasyFacture_2026-08-18.zip envoyé avec succès dans ton dossier Drive (SIRET : 12345678912345).
-[Backup] Sauvegarde initiale effectuée.
 NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
 NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
 NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
 NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
-[Backup Auto] Envoi de auto_backups\EasyFacture_2026-08-18.zip sur ton Google Drive...
-[Backup Auto] Fichier EasyFacture_2026-08-18.zip envoyé avec succès dans ton dossier Drive (SIRET : 12345678912345).
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+Type is not JSON serializable: function
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\json\orjson_wrapper.py", line 62, in _orjson_converter
+    raise TypeError(f'Object of type {obj.__class__.__name__} is not JSON serializable')
+TypeError: Object of type function is not JSON serializable
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\outbox.py", line 129, in loop
+    await coro
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\outbox.py", line 142, in _emit
+    await core.sio.emit(message_type, data, room=client_id)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\socketio\async_server.py", line 180, in emit
+    await self.manager.emit(event, data, namespace, room=room,
+                            skip_sid=skip_sid, callback=callback,
+                            ignore_queue=ignore_queue)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\socketio\async_manager.py", line 40, in emit
+    encoded_packet = pkt.encode()
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\socketio\packet.py", line 64, in encode
+    encoded_packet += self.json.dumps(data, separators=(',', ':'))
+                      ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\json\orjson_wrapper.py", line 43, in dumps
+    return orjson.dumps(obj, option=opts, default=_orjson_converter).decode('utf-8')
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Type is not JSON serializable: function
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
 Client has been deleted but is still being used. This is most likely a bug in your application code. See https://github.com/zauberzeug/nicegui/issues/3028 for more information.
 Stack (most recent call last):
-  File "C:\FacturEx\app.py", line 242, in <module>
-    ui.run(title="EasyFacture", port=9876, reload=False, show=False)
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\ui_run.py", line 311, in run
-    Server.instance.run()
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\server.py", line 49, in run
-    super().run(sockets=sockets)
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\uvicorn\server.py", line 74, in run
-    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\asyncio\runners.py", line 205, in run
-    return runner.run(main)
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\asyncio\runners.py", line 128, in run
-    return self._loop.run_until_complete(task)
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\asyncio\base_events.py", line 706, in run_until_complete
-    self.run_forever()
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\asyncio\base_events.py", line 677, in run_forever
-    self._run_once()
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\asyncio\base_events.py", line 2056, in _run_once
-    handle._run()
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\asyncio\events.py", line 94, in _run
-    self._context.run(self._callback, *self._args)
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\awaitable_response.py", line 27, in _fire
-    self.fire_and_forget()
-  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\client.py", line 301, in send_and_forget
-    self.outbox.enqueue_message('run_javascript', {'code': code}, target_id)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\FacturEx\ui_helpers.py", line 81, in tache_telechargement
+    ui.notify("HopToDesk prêt et lancé avec succès !", type="positive")
+  File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\functions\notify.py", line 53, in notify
+    client.outbox.enqueue_message('notify', options, client.id)
   File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\outbox.py", line 77, in enqueue_message
     self.client.check_existence()
   File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\client.py", line 478, in check_existence
     helpers.warn_once('Client has been deleted but is still being used. '
   File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\helpers\warnings.py", line 9, in warn_once
     log.warning(message, stack_info=stack_info)
-NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
-NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
-NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
-NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
-NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
-NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876

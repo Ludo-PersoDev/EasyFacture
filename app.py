@@ -41,6 +41,7 @@ from ui_maintenance import render_maintenance
 from ui_parametres import render_parametres
 from ui_passerelle import render_passerelle_export
 from ui_prestations import render_prestations
+from ui_helpers import lancer_assistance_technique
 
 # --- GESTION PROPRE DE LA FERMETURE ---
 def sauvegarder_et_quitter():
@@ -226,11 +227,12 @@ def render_fallback():
 
 with ui.header().classes("bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center text-slate-800"):
     with ui.row().classes("items-center gap-4"):
-        ui.button(icon="grid_view", on_click=lambda: set_page("Accueil")).props("flat round color=primary").tooltip("Menu Principal (Accueil)")
+        ui.button(icon="grid_view", on_click=lambda: set_page("Accueil")).props("flat round color=primary").tooltip("Menu Principal")
         ui.label("EasyFacture").classes("font-bold text-lg text-slate-800")
     
     with ui.row().classes("items-center gap-2"):
-        ui.badge("v1.8").props("color=slate outline")
+        ui.button("Assistance", icon="support_agent", on_click=lancer_assistance_technique).props("flat color=primary")
+        ui.badge("v1.9").props("color=slate outline")
         ui.button("Quitter", icon="exit_to_app", on_click=sauvegarder_et_quitter).props("flat color=red").classes("ml-4")
 
 with ui.column().classes("w-full p-6 bg-slate-50 min-h-screen"):

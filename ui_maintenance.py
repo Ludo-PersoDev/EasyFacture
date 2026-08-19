@@ -596,37 +596,44 @@ def render_maintenance_debug_section():
 
                         # --- ACTION 2 : AFFICHER LES LOGS STOCKÉS ---
                         def afficher_logs():
-                            with ui.dialog() as dlg, ui.card().classes("w-[700px] p-6 space-y-3"):
-                                ui.label("📜 Logs de l'Application & Launcher").classes("text-lg font-bold text-slate-800 border-b pb-2")
-                                
-                                log_path = "app.log"
-                                contenu_logs = "Aucun fichier de log trouvé. (Vérifie que la redirection des flux est active dans app.py)"
-                                
-                                if os.path.exists(log_path):
-                                    try:
-                                        with open(log_path, "r", encoding="utf-8") as f:
-                                            lignes = f.readlines()
-                                            # On garde les 100 dernières lignes pour ne pas surcharger
-                                            contenu_logs = "".join(lignes[-100:])
-                                    except Exception as ex:
-                                        contenu_logs = f"Erreur lecture des logs : {ex}"
-
-                                ui.textarea(value=contenu_logs).props("readonly outlined").classes("w-full h-80 font-mono text-xs bg-slate-900 text-emerald-400")
-
-                                with ui.row().classes("w-full justify-between items-center mt-4"):
-                                    def effacer_logs():
+                            # On crée le dialogue et on force sa largeur maximale via .style() de NiceGUI
+                            dlg = ui.dialog()
+                            
+                            with dlg:
+                                with ui.card().classes("p-6 space-y-3").style("width: 1100px; max-width: 95vw;"):
+                                    ui.label("📜 Logs de l'Application & Launcher").classes("text-lg font-bold text-slate-800 border-b pb-2")
+                                    
+                                    log_path = "app.log"
+                                    contenu_logs = "Aucun fichier de log trouvé."
+                                    
+                                    if os.path.exists(log_path):
                                         try:
-                                            with open(log_path, "w", encoding="utf-8") as f:
-                                                f.write("")
-                                            ui.notify("Logs effacés !", type="info")
-                                            dlg.close()
-                                        except Exception as e:
-                                            ui.notify(f"Erreur : {e}", type="negative")
+                                            with open(log_path, "r", encoding="utf-8") as f:
+                                                lignes = f.readlines()
+                                                contenu_logs = "".join(lignes[-150:])
+                                        except Exception as ex:
+                                            contenu_logs = f"Erreur lecture des logs : {ex}"
 
-                                    ui.button("Vider les logs", icon="delete", on_click=effacer_logs).props("flat color=negative")
-                                    ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
+                                    # Zone de texte large et haute sur fond blanc
+                                    ui.textarea(value=contenu_logs).props("readonly outlined autogrow").classes(
+                                        "font-mono text-sm bg-white text-black border-2 border-slate-300"
+                                    ).style("width: 100%; height: calc(100% - 60px); resize: none;")
+
+                                    with ui.row().classes("w-full justify-between items-center mt-4"):
+                                        def effacer_logs():
+                                            try:
+                                                with open(log_path, "w", encoding="utf-8") as f:
+                                                    f.write("")
+                                                ui.notify("Logs effacés !", type="info")
+                                                dlg.close()
+                                            except Exception as e:
+                                                ui.notify(f"Erreur : {e}", type="negative")
+
+                                        ui.button("Vider les logs", icon="delete", on_click=effacer_logs).props("flat color=negative")
+                                        ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
+                                        
+                            # On force la largeur du conteneur de la boîte de dialogue Quasar elle-même juste avant de l'ouvrir
                             dlg.open()
-
                         # --- ACTION 3 : DIAGNOSTIC & FICHIERS ---
                         def afficher_infos_debug():
                             with ui.dialog() as dlg, ui.card().classes("w-[600px] p-6 space-y-3"):

@@ -2,7 +2,7 @@
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
-#define MyAppVersion "1.9"
+#define MyAppVersion "1.9.2"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 
@@ -45,6 +45,7 @@ Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"; Tasks: desktopicon
 
 [Run]
-; Installation automatique de toutes les dépendances Python requises (v1.9)
-Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client pywebview"; Flags: runminimized waituntilterminated
+; Installation automatique de toutes les dépendances Python requises (v1.9.2)
+Filename: "python"; Parameters: "-m pip install --upgrade pip"; Flags: runminimized waituntilterminated
+Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client pywebview orjson requests"; Flags: runminimized waituntilterminated
 Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
