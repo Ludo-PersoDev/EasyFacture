@@ -33,8 +33,8 @@ def render_maintenance():
         ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
                 "Points d'attention - Sauvegarde & Maintenance",
                 [
-                    "Les sauvegardes automatiques sont effectuées en arrière-plan pour protéger vos données en continu.",
-                    "En cas de changement de poste, veillez à bien récupérer votre dernière base de données et vos documents.",
+                    "• Les sauvegardes automatiques sont effectuées en arrière-plan pour protéger vos données en continu.",
+                    "• En cas de changement de poste, veillez à bien récupérer votre dernière base de données et vos documents.",
                 ],
                 tuto_titre="Tuto : Restauration & Transfert de PC",
                 tuto_etapes=[

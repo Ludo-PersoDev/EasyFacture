@@ -15,7 +15,7 @@ def afficher_note_importante(titre, contenu_liste, tuto_titre=None, tuto_etapes=
             for point in contenu_liste:
                 with ui.row().classes("items-start gap-2"):
                     # Petit point ou icône colorée pour donner du punch
-                    ui.icon("warning", color="amber", size="xs").classes("mt-1")
+                    # ui.icon("warning", color="amber", size="xs").classes("mt-1")
                     ui.label(point).classes("text-sm font-semibold text-amber-900")
                 
         # Bloc tuto encadré sur fond bleu (s'il y en a un)

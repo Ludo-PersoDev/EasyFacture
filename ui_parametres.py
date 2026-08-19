@@ -16,9 +16,9 @@ def render_parametres():
         ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
             "Points d'attention - Paramètres",
             [
-                "Le nom de l'entreprise et le SIRET sont obligatoires pour débloquer la facturation.",
-                "Ces informations apparaîtront sur tous vos documents officiels (devis/factures).",
-                "Les envois de mails internes au logiciels ne sont fonctionnels qu'avec une adresse GMail équipée d'un mot de passe d'application"
+                "• Le nom de l'entreprise et le SIRET sont obligatoires pour débloquer la facturation.",
+                "• Ces informations apparaîtront sur tous vos documents officiels (devis/factures).",
+                "• Les envois de mails internes au logiciels ne sont fonctionnels qu'avec une adresse GMail équipée d'un mot de passe d'application"
             ],
             tuto_titre="Tuto : Mot de passe d'application Gmail",
             tuto_etapes=[

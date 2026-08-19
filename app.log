@@ -56,3 +56,5 @@ Stack (most recent call last):
     helpers.warn_once('Client has been deleted but is still being used. '
   File "C:\Users\Ludovic\AppData\Local\Programs\Python\Python314\Lib\site-packages\nicegui\helpers\warnings.py", line 9, in warn_once
     log.warning(message, stack_info=stack_info)
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876
+NiceGUI ready to go on http://localhost:9876, http://169.254.11.33:9876, http://169.254.215.90:9876, http://169.254.241.130:9876, http://169.254.71.243:9876, and http://192.168.1.59:9876

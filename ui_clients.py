@@ -21,10 +21,10 @@ def render_clients():
         ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
                 "Points d'attention - Fichier Clients",
                 [
-                    "Pour un professionnel, indiquez le nom de l'entreprise ; pour un particulier, le nom et le prénom.",
-                    "L'adresse de facturation est obligatoire car elle figurera sur tous vos documents officiels.",
-                    "L'e-mail de contact est indispensable pour l'envoi automatisé de vos devis et factures.",
-                    "Une fois un client rattaché à une facture validée, ses coordonnées sont figées pour la comptabilité."
+                    "• Pour un professionnel, indiquez le nom de l'entreprise ; pour un particulier, le nom et le prénom.",
+                    "• L'adresse de facturation est obligatoire car elle figurera sur tous vos documents officiels.",
+                    "• L'e-mail de contact est indispensable pour l'envoi automatisé de vos devis et factures.",
+                    "• Une fois un client rattaché à une facture validée, ses coordonnées sont figées pour la comptabilité."
                 ],
                 tuto_titre="Tuto : Tarifs, Multi-sites & Options de facturation",
                 tuto_etapes=[

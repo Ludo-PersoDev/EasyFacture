@@ -11,10 +11,10 @@ def render_prestations():
         ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
     "Points d'attention - Catalogue",
     [
-        "La TVA est désactivée automatiquement si vous êtes en franchise en base (Micro-entreprise).",
-        "Une fois une facture générée, les taux de TVA sont figés : vérifiez bien vos paramètres avant !",
-        "L'unité (Heure/Forfait) doit être cohérente pour faciliter votre suivi de prestation plus tard.",
-        "Une prestation modifiée ne rétroagit pas sur les factures déjà créées."
+        "• La TVA est désactivée automatiquement si vous êtes en franchise en base (Micro-entreprise).",
+        "• Une fois une facture générée, les taux de TVA sont figés : vérifiez bien vos paramètres avant !",
+        "• L'unité (Heure/Forfait) doit être cohérente pour faciliter votre suivi de prestation plus tard.",
+        "• Une prestation modifiée ne rétroagit pas sur les factures déjà créées."
     ]
 )).props("flat color=amber")
 

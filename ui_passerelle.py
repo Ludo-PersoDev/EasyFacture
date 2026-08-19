@@ -131,8 +131,8 @@ def render_passerelle_export():
           ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
             "Points d'attention - Passerelle de transmission",
             [
-                "EasyFacture ne génère pas directement le format Factur-X lui-même : l'application transmet vos PDF standardisés à la passerelle.",
-                "⚠️ PRÉREQUIS INDISPENSABLE : Pour que l'envoi fonctionne, la section d'envoi de mail SMTP doit être correctement remplie et paramétrée dans les paramètres de l'entreprise."
+                "• EasyFacture ne génère pas directement le format Factur-X lui-même : l'application transmet vos PDF standardisés à la passerelle.",
+                "• PRÉREQUIS INDISPENSABLE : Pour que l'envoi fonctionne, la section d'envoi de mail SMTP doit être correctement remplie et paramétrée dans les paramètres de l'entreprise."
             ],
             tuto_titre="Tuto : Fonctionnement des envois & Suivi",
             tuto_etapes=[
