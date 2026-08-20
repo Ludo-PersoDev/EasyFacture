@@ -231,7 +231,10 @@ with ui.header().classes("bg-white border-b border-slate-200 px-6 py-3 flex just
         ui.label("EasyFacture").classes("font-bold text-lg text-slate-800")
     
     with ui.row().classes("items-center gap-2"):
-        ui.button("Assistance", icon="support_agent", on_click=lancer_assistance_technique).props("flat color=primary")
+        b = ui.button(on_click=lancer_assistance_technique).props("flat color=primary")
+        with b:
+            ui.image('assets/support_icon.png').classes('w-10 h-10 mr-2')
+            ui.label('Assistance')
         ui.badge("v1.9").props("color=slate outline")
         ui.button("Quitter", icon="exit_to_app", on_click=sauvegarder_et_quitter).props("flat color=red").classes("ml-4")
 
