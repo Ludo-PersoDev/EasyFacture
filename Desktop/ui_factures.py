@@ -56,32 +56,32 @@ def render_factures():
           else "Tous"
       )
 
-      conn = database.get_conn()
-      query = """
-                SELECT 
-                    f.*, 
-                    c.nom_societe AS client_nom,
-                    c.email AS client_email,
-                    c.recap_interventions AS client_recap
-                FROM factures f
-                JOIN clients c ON f.client_id = c.id
-                ORDER BY f.id DESC
-            """
-      rows = conn.execute(query).fetchall()
-      conn.close()
+      # Requête Supabase avec jointure sur la table clients
+      query = database.get_client().table("factures").select(
+          "*, clients(nom_societe, email, recap_interventions)"
+      ).order("id", desc=True)
+      
+      response = query.execute()
+      rows = response.data or []
 
       aujourdhui = datetime.now().date()
       factures_list = []
 
       for r in rows:
         item = dict(r)
-        item["date_creation_fr"] = formater_date_fr(item["date_creation"])
-        item["date_echeance_fr"] = formater_date_fr(item["date_echeance"])
-        item["total_ht_txt"] = f"{item['total_ht'] or 0.0:.2f} € HT"
-        item["total_ttc_txt"] = f"{item['total_ttc'] or 0.0:.2f} € TTC"
+        # Remappe les champs de la jointure Supabase vers la structure attendue par l'UI
+        client_data = item.pop("clients", {}) or {}
+        item["client_nom"] = client_data.get("nom_societe", "")
+        item["client_email"] = client_data.get("email", "")
+        item["client_recap"] = client_data.get("recap_interventions", 0)
+
+        item["date_creation_fr"] = formater_date_fr(item.get("date_creation"))
+        item["date_echeance_fr"] = formater_date_fr(item.get("date_echeance"))
+        item["total_ht_txt"] = f"{item.get('total_ht') or 0.0:.2f} € HT"
+        item["total_ttc_txt"] = f"{item.get('total_ttc') or 0.0:.2f} € TTC"
 
         etat_echeance = "vert"
-        if item["statut"] not in ["Payée", "Annulée"] and item.get(
+        if item.get("statut") not in ["Payée", "Annulée"] and item.get(
             "date_echeance"
         ):
           try:
@@ -370,22 +370,19 @@ def render_factures():
               label="Intitulé du compteur",
           ).classes("w-48").props("dense outlined")
 
-        conn = database.get_conn()
-        query_items = """
-                    SELECT 
-                        i.*, 
-                        p.designation AS prest_nom,
-                        e.nom_site AS etablissement_nom
-                    FROM interventions i
-                    LEFT JOIN prestations p ON i.prestation_id = p.id
-                    LEFT JOIN etablissements e ON i.etablissement_id = e.id
-                    WHERE i.facture_id = ?
-                    ORDER BY i.date ASC
-                """
-        interventions = conn.execute(
-            query_items, (facture["id"],)
-        ).fetchall()
-        conn.close()
+        # Récupération des interventions liées via Supabase
+        res_items = database.get_client().table("interventions").select(
+            "*, prestations(designation), etablissements(nom_site)"
+        ).eq("facture_id", facture["id"]).order("date", desc=False).execute()
+        
+        interventions = []
+        for it in (res_items.data or []):
+          item_flat = dict(it)
+          prest_data = item_flat.pop("prestations", {}) or {}
+          etab_data = item_flat.pop("etablissements", {}) or {}
+          item_flat["prest_nom"] = prest_data.get("designation") if prest_data else None
+          item_flat["etablissement_nom"] = etab_data.get("nom_site") if etab_data else None
+          interventions.append(item_flat)
 
         if not interventions:
           ui.label("Aucune prestation détaillée liée à cette facture.").classes(
@@ -640,15 +637,11 @@ def render_factures():
         cochables_holder = {}
 
         def verifier_et_afficher_options_recap(client_id):
-          conn = database.get_conn()
-          client_res = conn.execute(
-              "SELECT recap_interventions FROM clients WHERE id = ?",
-              (client_id,),
-          ).fetchone()
-          conn.close()
+          res_client = database.get_client().table("clients").select("recap_interventions").eq("id", client_id).execute()
+          client_res = res_client.data[0] if res_client.data else None
 
           recap_active = (
-              client_res and client_res["recap_interventions"] == 1
+              client_res and client_res.get("recap_interventions") == 1
           )
           recap_options_container.clear()
           intitule_select_modal_holder["select"] = None
@@ -681,16 +674,17 @@ def render_factures():
           prestations_container.clear()
           cochables_holder.clear()
 
-          conn = database.get_conn()
-          query = """
-                        SELECT i.*, p.designation AS prest_nom
-                        FROM interventions i
-                        LEFT JOIN prestations p ON i.prestation_id = p.id
-                        WHERE i.client_id = ? AND (i.facture_id IS NULL OR i.facture_id = '')
-                        ORDER BY i.date ASC
-                    """
-          items = conn.execute(query, (client_id,)).fetchall()
-          conn.close()
+          # Récupération des interventions non facturées via Supabase
+          res_items = database.get_client().table("interventions").select(
+              "*, prestations(designation)"
+          ).eq("client_id", client_id).is_("facture_id", "null").order("date", desc=False).execute()
+          
+          items = []
+          for it in (res_items.data or []):
+            item_flat = dict(it)
+            prest_data = item_flat.pop("prestations", {}) or {}
+            item_flat["prest_nom"] = prest_data.get("designation") if prest_data else None
+            items.append(item_flat)
 
           if not items:
             with prestations_container:
@@ -710,7 +704,7 @@ def render_factures():
                   i_dict["quantite"] or 1.0
               )
               txt_label = (
-                  f"{d_fr} | {i_dict['numero_intervention']} -"
+                  f"{d_fr} | {i_dict.get('numero_intervention', '')} -"
                   f" {i_dict['prest_nom'] or 'Prestation'}"
                   f" ({i_dict['quantite']}h) : {px_tot:.2f} € HT"
               )
@@ -817,63 +811,48 @@ def render_factures():
 
           tot_ttc = tot_ht + tot_tva
 
-          conn = database.get_conn()
-          cur = conn.cursor()
+          # Insertion de la facture via Supabase
+          res_fac = database.get_client().table("factures").insert({
+              "numero_facture": num_facture,
+              "client_id": client_id,
+              "date_creation": date_emiss_iso,
+              "date_echeance": date_ech_iso,
+              "statut": "Émise",
+              "total_ht": tot_ht,
+              "total_tva": tot_tva,
+              "total_ttc": tot_ttc,
+              "conditions_reglement": options_echeance.get(select_delai.value, select_delai.value)
+          }).execute()
 
-          cur.execute(
-              """
-                        INSERT INTO factures (
-                            numero_facture, client_id, date_creation, date_echeance, 
-                            statut, total_ht, total_tva, total_ttc, conditions_reglement
-                        )
-                        VALUES (?, ?, ?, ?, 'Émise', ?, ?, ?, ?)
-                    """,
-              (
-                  num_facture,
-                  client_id,
-                  date_emiss_iso,
-                  date_ech_iso,
-                  tot_ht,
-                  tot_tva,
-                  tot_ttc,
-                  options_echeance.get(
-                      select_delai.value, select_delai.value
-                  ),
-              ),
-          )
+          if not res_fac.data:
+            ui.notify("Erreur lors de la création de la facture dans Supabase.", type="negative")
+            return
 
-          facture_id = cur.lastrowid
+          facture_id = res_fac.data[0]["id"]
 
+          # Mise à jour des interventions et insertion dans facture_items
           for item_id in interv_ids_soisis:
-            cur.execute(
-                "UPDATE interventions SET facture_id = ?, statut = 'Facturé'"
-                " WHERE id = ?",
-                (facture_id, item_id),
-            )
-            cur.execute(
-                "INSERT INTO facture_items (facture_id, intervention_id)"
-                " VALUES (?, ?)",
-                (facture_id, item_id),
-            )
+            database.get_client().table("interventions").update({
+                "facture_id": facture_id,
+                "statut": "Facturé"
+            }).eq("id", item_id).execute()
 
-          client_info = conn.execute(
-              "SELECT recap_interventions FROM clients WHERE id = ?",
-              (client_id,),
-          ).fetchone()
-          if client_info and client_info["recap_interventions"] == 1:
-            conn.execute(
-                "UPDATE factures SET recap_genere = 1 WHERE id = ?",
-                (facture_id,),
-            )
+            database.get_client().table("facture_items").insert({
+                "facture_id": facture_id,
+                "intervention_id": item_id
+            }).execute()
 
-          conn.commit()
-          conn.close()
+          res_client = database.get_client().table("clients").select("recap_interventions").eq("id", client_id).execute()
+          client_info = res_client.data[0] if res_client.data else None
+
+          if client_info and client_info.get("recap_interventions") == 1:
+            database.get_client().table("factures").update({"recap_genere": 1}).eq("id", facture_id).execute()
 
           intitule_choisi = "Intervention(s)"
           sel_widget = intitule_select_modal_holder["select"]
           if (
               client_info
-              and client_info["recap_interventions"] == 1
+              and client_info.get("recap_interventions") == 1
               and sel_widget
               and sel_widget.value
           ):
@@ -881,7 +860,7 @@ def render_factures():
 
           try:
             pdf_factures.generer_pdf_facture(facture_id)
-            if client_info and client_info["recap_interventions"] == 1:
+            if client_info and client_info.get("recap_interventions") == 1:
               if hasattr(pdf_factures, "generer_pdf_recap_facture"):
                 pdf_factures.generer_pdf_recap_facture(
                     facture_id, intitule=intitule_choisi
@@ -938,14 +917,12 @@ def render_factures():
           date_paiement = date_selectionnee.value
           mode_paiement = mode_select.value
 
-          conn = database.get_conn()
-          conn.execute(
-              "UPDATE factures SET statut = 'Payée', date_paiement = ?,"
-              " mode_reglement = ? WHERE id = ?",
-              (date_paiement, mode_paiement, facture["id"]),
-          )
-          conn.commit()
-          conn.close()
+          # Mise à jour du statut de paiement via Supabase
+          database.get_client().table("factures").update({
+              "statut": "Payée",
+              "date_paiement": date_paiement,
+              "mode_reglement": mode_paiement
+          }).eq("id", facture["id"]).execute()
 
           ui.notify(
               f"Facture {facture['numero_facture']} payée le"
@@ -978,18 +955,15 @@ def render_factures():
         ).classes("text-slate-500 text-xs italic")
 
         def annuler_et_creer_avoir():
-          conn = database.get_conn()
-          conn.execute(
-              "UPDATE interventions SET facture_id = NULL, statut = 'Réalisée'"
-              " WHERE facture_id = ?",
-              (facture["id"],),
-          )
-          conn.execute(
-              "UPDATE factures SET statut = 'Annulée' WHERE id = ?",
-              (facture["id"],),
-          )
-          conn.commit()
-          conn.close()
+          # Libération des interventions et passage de la facture en 'Annulée' via Supabase
+          database.get_client().table("interventions").update({
+              "facture_id": None,
+              "statut": "Réalisée"
+          }).eq("facture_id", facture["id"]).execute()
+
+          database.get_client().table("factures").update({
+              "statut": "Annulée"
+          }).eq("id", facture["id"]).execute()
 
           dialog.close()
           ui.notify(
@@ -1056,16 +1030,13 @@ def render_factures():
         )
 
     def ouvrir_dialog_email(facture):
-      conn = database.get_conn()
-      client = conn.execute(
-          "SELECT nom_societe, email, recap_interventions FROM clients"
-          " WHERE id=?",
-          (facture["client_id"],),
-      ).fetchone()
-      conn.close()
+      res_client = database.get_client().table("clients").select(
+          "nom_societe, email, recap_interventions"
+      ).eq("id", facture["client_id"]).execute()
+      client = res_client.data[0] if res_client.data else None
 
       email_client = facture.get("client_email", "") or (
-          client["email"] if client else ""
+          client.get("email") if client else ""
       )
 
       if not email_client:
@@ -1083,10 +1054,10 @@ def render_factures():
             "text-lg font-bold text-slate-800 border-b pb-2 w-full"
         )
         ui.label(
-            f"Le document sera envoyé à : {client['nom_societe'] if client else 'Client'} ({email_client})"
+            f"Le document sera envoyé à : {client.get('nom_societe') if client else 'Client'} ({email_client})"
         ).classes("text-sm text-slate-600")
 
-        if client and client["recap_interventions"] == 1:
+        if client and client.get("recap_interventions") == 1:
           ui.label(
               "📎 Le récapitulatif détaillé des prestations sera joint"
               " automatiquement à l'e-mail."
@@ -1105,7 +1076,7 @@ def render_factures():
                 f"{facture['numero_facture']}"
                 + (
                     " ainsi que le récapitulatif détaillé de vos prestations."
-                    if client and client["recap_interventions"] == 1
+                    if client and client.get("recap_interventions") == 1
                     else "."
                 )
                 + "\n\nCordialement."
@@ -1117,7 +1088,7 @@ def render_factures():
 
           recap_path = None
           recap_actif = False
-          if client and "recap_interventions" in client.keys():
+          if client and "recap_interventions" in client:
             recap_actif = client["recap_interventions"] == 1
 
           if recap_actif:
@@ -1145,14 +1116,10 @@ def render_factures():
 
           if succes:
             date_jour_iso = datetime.now().strftime("%Y-%m-%d")
-            conn_e = database.get_conn()
-            conn_e.execute(
-                "UPDATE factures SET statut='Envoyée', date_envoi_mail=? WHERE"
-                " id=?",
-                (date_jour_iso, facture["id"]),
-            )
-            conn_e.commit()
-            conn_e.close()
+            database.get_client().table("factures").update({
+                "statut": "Envoyée",
+                "date_envoi_mail": date_jour_iso
+            }).eq("id", facture["id"]).execute()
 
             ui.notify(
                 f"Facture {facture['numero_facture']} envoyée à {dest} avec"

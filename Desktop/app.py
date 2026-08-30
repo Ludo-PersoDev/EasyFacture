@@ -3,7 +3,8 @@ import multiprocessing
 import os
 import sys
 import threading
-import nicegui
+from nicegui import app, ui
+from nicegui import run
 import asyncio
 import time
 import subprocess
@@ -219,7 +220,10 @@ def render_odoo_home():
                     card.classes("opacity-50 cursor-not-allowed")
                     card.on("click", lambda m="Module verrouillé": ui.notify(m, type="warning"))
                 else:
-                    card.on("click", lambda t=title: set_page(t))
+                    def make_handler(t):
+                        return lambda: set_page(t)
+                    card.on("click", make_handler(title))
+
                 with card:
                     ui.icon(icon, size="2.5rem").classes(f"text-{color}-600")
                     ui.label(title).classes("font-bold text-lg text-slate-800")

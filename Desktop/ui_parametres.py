@@ -1,4 +1,3 @@
-# ui_parametres.py
 import asyncio
 import os
 from nicegui import ui
@@ -119,8 +118,10 @@ def render_parametres():
                     tva_exo_checkbox = ui.checkbox("Entreprise exonérée de TVA", value=bool(params.get("tva_exoneree", 1)))
                     mention_exo_input = ui.input("Mention légale d'exonération", value=params.get("mention_tva_exoneree", "TVA non applicable, art. 293 B du CGI")).classes("w-full")
                     num_tva_input = ui.input("N° TVA Intracommunautaire", value=params.get("num_tva", "")).classes("w-full")
-                    mention_exo_input.bind_enabled_from(tva_exo_checkbox, 'value')
-                    num_tva_input.bind_enabled_from(tva_exo_checkbox, 'value', backward=lambda val: not val)
+                    
+                    # Logique inversée corrigée pour l'état initial et les liaisons dynamiques
+                    mention_exo_input.bind_visibility_from(tva_exo_checkbox, 'value')
+                    num_tva_input.bind_visibility_from(tva_exo_checkbox, 'value', backward=lambda val: not val)
 
                 ui.label("Configuration E-mail (SMTP)").classes("text-lg font-semibold text-slate-700 border-b pb-2 w-full mt-4")
                 with ui.row().classes("w-full gap-4"):

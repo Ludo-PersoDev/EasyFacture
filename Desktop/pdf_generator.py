@@ -21,29 +21,43 @@ def format_date_fr(date_str):
         return date_str
 
 def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
-    conn = database.get_conn()
+    supabase = database.get_db()
     
-    # 1. Chargement des données
-    devis = conn.execute("SELECT * FROM devis WHERE id=?", (devis_id,)).fetchone()
-    if not devis:
-        conn.close()
+    # 1. Chargement des données via Supabase
+    # Récupération du devis par son id
+    devis_res = supabase.table("devis").select("*").eq("id", devis_id).execute()
+    if not devis_res.data:
         return None
+    devis = devis_res.data[0]
 
-    client = conn.execute("SELECT * FROM clients WHERE id=?", (devis['client_id'],)).fetchone()
-    items = conn.execute("""
-        SELECT di.*, p.designation, p.unite 
-        FROM devis_items di
-        JOIN prestations p ON di.prestation_id = p.id
-        WHERE di.devis_id=?
-    """, (devis_id,)).fetchall()
+    # Récupération du client associé
+    client_res = supabase.table("clients").select("*").eq("id", devis['client_id']).execute()
+    client = client_res.data[0] if client_res.data else {}
+
+    # Récupération des lignes du devis (devis_items) avec les informations des prestations (designation, unite)
+    items_res = supabase.table("devis_items").select(
+        "*, prestations(designation, unite)"
+    ).eq("devis_id", devis_id).execute()
     
+    items = []
+    for row in items_res.data:
+        prestation = row.get("prestations") or {}
+        item_data = {
+            "quantite": row.get("quantite"),
+            "prix_unitaire_ht": row.get("prix_unitaire_ht"),
+            "taux_tva": row.get("taux_tva"),
+            "designation": prestation.get("designation", ""),
+            "unite": prestation.get("unite", "")
+        }
+        items.append(item_data)
+    
+    # Récupération des paramètres généraux
     params = database.recuperer_parametres()
-    conn.close()
 
     # Formater les dates au format FR (JJ/MM/AAAA)
-    date_creation_fr = format_date_fr(devis['date_creation'])
-    date_validite_fr = format_date_fr(devis['date_validite'])
-    date_exec_fr = format_date_fr(devis['date_prevue_execution'])
+    date_creation_fr = format_date_fr(devis.get('date_creation'))
+    date_validite_fr = format_date_fr(devis.get('date_validite'))
+    date_exec_fr = format_date_fr(devis.get('date_prevue_execution'))
 
     # 2. Configuration du document PDF
     doc = SimpleDocTemplate(
@@ -98,6 +112,7 @@ def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
                 print(f"[PDF LOGO] ❌ Erreur d'affichage : {e}")
         else:
             print(f"[PDF LOGO] ❌ Fichier introuvable sur le disque : {logo_path}")
+            
     # Infos entreprise
     e_text = f"<b><font size='11' color='{COLOR_PRIMARY.hexval()}'>{params.get('nom_entreprise', 'Mon Entreprise')}</font></b><br/>"
     if params.get('adresse'): e_text += f"{params.get('adresse')}<br/>"
@@ -111,7 +126,7 @@ def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
     # Titre du document & Numéro à droite
     doc_title_text = f"""
     <font color="{COLOR_PRIMARY.hexval()}" size="22"><b>DEVIS</b></font><br/>
-    <font color="{COLOR_SECONDARY.hexval()}" size="12"><b>N° {devis['numero_devis']}</b></font><br/><br/>
+    <font color="{COLOR_SECONDARY.hexval()}" size="12"><b>N° {devis.get('numero_devis', '')}</b></font><br/><br/>
     <b>Date d'émission :</b> {date_creation_fr}<br/>
     <b>Date de validité :</b> {date_validite_fr}<br/>
     """
@@ -136,12 +151,12 @@ def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
     
     client_text = f"""
     <font size="9" color="{COLOR_PRIMARY.hexval()}"><b>DESTINATAIRE :</b></font><br/><br/>
-    <font size="11" color="#0f172a"><b>{client['nom_societe']}</b></font><br/>
+    <font size="11" color="#0f172a"><b>{client.get('nom_societe', '')}</b></font><br/>
     """
-    if client['contact']: client_text += f"À l'attention de : {client['contact']}<br/>"
-    if client['adresse']: client_text += f"{client['adresse']}<br/>"
-    if client['cp'] or client['ville']: client_text += f"{client['cp']} {client['ville']}<br/>"
-    if client['siret'] and not client['est_particulier']: client_text += f"SIRET : {client['siret']}<br/>"
+    if client.get('contact'): client_text += f"À l'attention de : {client.get('contact')}<br/>"
+    if client.get('adresse'): client_text += f"{client.get('adresse')}<br/>"
+    if client.get('cp') or client.get('ville'): client_text += f"{client.get('cp', '')} {client.get('ville', '')}<br/>"
+    if client.get('siret') and not client.get('est_particulier'): client_text += f"SIRET : {client.get('siret')}<br/>"
 
     client_table = Table([[Paragraph(client_text, style_normal)]], colWidths=[8.5*cm])
     client_table.setStyle(TableStyle([
@@ -193,14 +208,14 @@ def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
     elements.append(Spacer(1, 0.6*cm))
 
     # --- 4. TOTAUX & REMARQUES ---
-    remarque_text = f"<b>Remarques / Conditions :</b><br/>{devis['remarque']}" if devis['remarque'] else ""
+    remarque_text = f"<b>Remarques / Conditions :</b><br/>{devis['remarque']}" if devis.get('remarque') else ""
     cell_remarque = Paragraph(remarque_text, style_normal)
 
     totaux_data = [
-        [Paragraph("<b>Total HT :</b>", style_total_lbl), Paragraph(f"{devis['total_ht']:.2f} €", style_total_val)],
-        [Paragraph("<b>Total TVA :</b>", style_total_lbl), Paragraph(f"{devis['total_tva']:.2f} €", style_total_val)],
+        [Paragraph("<b>Total HT :</b>", style_total_lbl), Paragraph(f"{devis.get('total_ht', 0):.2f} €", style_total_val)],
+        [Paragraph("<b>Total TVA :</b>", style_total_lbl), Paragraph(f"{devis.get('total_tva', 0):.2f} €", style_total_val)],
         [Paragraph("<b>Total TTC :</b>", ParagraphStyle('TTCLbl', parent=style_total_lbl, fontName="Helvetica-Bold", fontSize=11, textColor=COLOR_PRIMARY)), 
-         Paragraph(f"<b>{devis['total_ttc']:.2f} €</b>", style_ttc_val)]
+         Paragraph(f"<b>{devis.get('total_ttc', 0):.2f} €</b>", style_ttc_val)]
     ]
 
     totaux_table = Table(totaux_data, colWidths=[3.5*cm, 3.5*cm])
@@ -219,7 +234,7 @@ def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
     # --- 5. MENTION DE TVA & BON POUR ACCORD ---
     bottom_left_elements = []
 
-    if params.get('tva_exoneree', 1) or client['sans_tva']:
+    if params.get('tva_exoneree', 1) or client.get('sans_tva'):
         mention_tva = params.get('mention_tva_exoneree', 'TVA non applicable, art. 293 B du CGI')
         bottom_left_elements.append(Paragraph(f"<i><font color='#64748b'>{mention_tva}</font></i>", style_normal))
         bottom_left_elements.append(Spacer(1, 0.4*cm))
@@ -244,11 +259,11 @@ def generer_pdf_devis(devis_id, output_path="devis_temp.pdf"):
     # Génération du PDF
     doc.build(elements)
     return output_path
+
 def nettoyer_nom_dossier(nom):
     """Supprime les caractères spéciaux non autorisés dans les noms de dossiers Windows."""
     if not nom:
         return "Client_Inconnu"
-    # Remplace les caractères interdits par un underscore
     nom_propre = re.sub(r'[\\/*?:"<>|]', "_", str(nom).strip())
     return nom_propre or "Client_Inconnu"
 
@@ -257,16 +272,12 @@ def obtenir_chemin_export(nom_client, type_doc="Devis"):
     Génère l'arborescence : C:\FactureX\Export\NomClient\TypeDocument\
     et renvoie le chemin complet du dossier.
     """
-    # Chemin racine de l'application (ex: C:\FactureX ou le dossier d'exécution)
     base_dir = os.getcwd()
     
     client_folder = nettoyer_nom_dossier(nom_client)
     doc_folder = "Devis" if "devis" in type_doc.lower() else "Factures"
 
-    # Construction du chemin complet
     export_dir = os.path.join(base_dir, "Export", client_folder, doc_folder)
-    
-    # Création automatique des sous-dossiers s'ils n'existent pas
     os.makedirs(export_dir, exist_ok=True)
     
     return export_dir

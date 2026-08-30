@@ -138,7 +138,7 @@ def render_maintenance():
                                 os.remove(zip_filename)
 
                             # Création du ZIP local (BDD + Exports/Export + Assets)
-                            with zipfile.ZipFile(chemin_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
                                 # 1. La base de données
                                 if os.path.exists(DB_FILENAME):
                                     zipf.write(DB_FILENAME, arcname=DB_FILENAME)
@@ -567,111 +567,110 @@ def render_maintenance_debug_section():
         with debug_container:
             ui.label("Accès réservé au développeur pour le diagnostic et les tests.").classes("text-sm text-slate-500")
             
-            pin_input = ui.input("Code PIN Débug", password=True, password_toggle_button=True).props("dense outlined").classes("w-64")
-            
-            def verifier_code():
-                if pin_input.value == CODE_PIN_SECRET:
-                    ui.notify("Mode Debug activé avec succès !", type="positive", icon="lock_open")
-                    debug_container.clear()
-                    with debug_container:
-                        ui.badge("Mode Debug ACTIF").props("color=positive font-bold text-sm").classes("p-2")
-                        ui.label("Options de debug disponibles :").classes("font-semibold text-slate-700 mt-2")
-                        
-                        # --- ACTION 1 : PURGER LES CACHES ---
-                        def purger_caches():
-                            compteur = 0
-                            try:
-                                for root, dirs, files in os.walk(os.path.dirname(os.path.abspath(__file__))):
-                                    for d in dirs:
-                                        if d == "__pycache__":
-                                            chem_cache = os.path.join(root, d)
-                                            shutil.rmtree(chem_cache, ignore_errors=True)
-                                            compteur += 1
-                                    for file in files:
-                                        if file.endswith(".pyc"):
-                                            os.remove(os.path.join(root, file))
-                                ui.notify(f"Succès : {compteur} dossier(s) __pycache__ purgé(s) !", type="positive", icon="cleaning_services")
-                            except Exception as e:
-                                ui.notify(f"Erreur lors de la purge : {e}", type="negative")
-
-                        # --- ACTION 2 : AFFICHER LES LOGS STOCKÉS ---
-                        def afficher_logs():
-                            # On crée le dialogue et on force sa largeur maximale via .style() de NiceGUI
-                            dlg = ui.dialog()
+            with ui.row().classes("w-full items-center gap-3"):
+                pin_input = ui.input("Code PIN Débug", password=True, password_toggle_button=True).props("dense outlined").classes("w-64")
+                
+                def verifier_code():
+                    if pin_input.value == CODE_PIN_SECRET:
+                        ui.notify("Mode Debug activé avec succès !", type="positive", icon="lock_open")
+                        debug_container.clear()
+                        with debug_container:
+                            ui.badge("Mode Debug ACTIF").props("color=positive font-bold text-sm").classes("p-2")
+                            ui.label("Options de debug disponibles :").classes("font-semibold text-slate-700 mt-2")
                             
-                            with dlg:
-                                with ui.card().classes("p-6 space-y-3").style("width: 1100px; max-width: 95vw;"):
-                                    ui.label("📜 Logs de l'Application & Launcher").classes("text-lg font-bold text-slate-800 border-b pb-2")
-                                    
-                                    log_path = "app.log"
-                                    contenu_logs = "Aucun fichier de log trouvé."
-                                    
-                                    if os.path.exists(log_path):
-                                        try:
-                                            with open(log_path, "r", encoding="utf-8") as f:
-                                                lignes = f.readlines()
-                                                contenu_logs = "".join(lignes[-150:])
-                                        except Exception as ex:
-                                            contenu_logs = f"Erreur lecture des logs : {ex}"
-
-                                    # Zone de texte large et haute sur fond blanc
-                                    ui.textarea(value=contenu_logs).props("readonly outlined autogrow").classes(
-                                        "font-mono text-sm bg-white text-black border-2 border-slate-300"
-                                    ).style("width: 100%; height: calc(100% - 60px); resize: none;")
-
-                                    with ui.row().classes("w-full justify-between items-center mt-4"):
-                                        def effacer_logs():
-                                            try:
-                                                with open(log_path, "w", encoding="utf-8") as f:
-                                                    f.write("")
-                                                ui.notify("Logs effacés !", type="info")
-                                                dlg.close()
-                                            except Exception as e:
-                                                ui.notify(f"Erreur : {e}", type="negative")
-
-                                        ui.button("Vider les logs", icon="delete", on_click=effacer_logs).props("flat color=negative")
-                                        ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
-                                        
-                            # On force la largeur du conteneur de la boîte de dialogue Quasar elle-même juste avant de l'ouvrir
-                            dlg.open()
-                        # --- ACTION 3 : DIAGNOSTIC & FICHIERS ---
-                        def afficher_infos_debug():
-                            with ui.dialog() as dlg, ui.card().classes("w-[600px] p-6 space-y-3"):
-                                ui.label("📊 Diagnostic de l'Environnement").classes("text-lg font-bold text-slate-800 border-b pb-2")
-                                
-                                python_version = sys.version
-                                encoding_actuel = sys.stdout.encoding if sys.stdout else "Inconnu"
-                                base_dir = os.path.dirname(os.path.abspath(__file__))
-                                
-                                ui.label(f"• Répertoire de travail : {base_dir}").classes("text-xs text-slate-600 font-mono")
-                                ui.label(f"• Version Python : {python_version}").classes("text-xs text-slate-600 font-mono")
-                                
-                                ui.label("Derniers fichiers modifiés dans le projet :").classes("font-semibold text-sm text-slate-700 mt-2")
-                                
-                                fichiers_recents = []
+                            # --- ACTION 1 : PURGER LES CACHES ---
+                            def purger_caches():
+                                compteur = 0
                                 try:
-                                    for f in os.listdir(base_dir):
-                                        if f.endswith(".py") or f.endswith(".pyw"):
-                                            path_f = os.path.join(base_dir, f)
-                                            mtime = os.path.getmtime(path_f)
-                                            fichiers_recents.append((f, datetime.fromtimestamp(mtime)))
+                                    for root, dirs, files in os.walk(os.path.dirname(os.path.abspath(__file__))):
+                                        for d in dirs:
+                                            if d == "__pycache__":
+                                                chem_cache = os.path.join(root, d)
+                                                shutil.rmtree(chem_cache, ignore_errors=True)
+                                                compteur += 1
+                                        for file in files:
+                                            if file.endswith(".pyc"):
+                                                os.remove(os.path.join(root, file))
+                                    ui.notify(f"Succès : {compteur} dossier(s) __pycache__ purgé(s) !", type="positive", icon="cleaning_services")
+                                except Exception as e:
+                                    ui.notify(f"Erreur lors de la purge : {e}", type="negative")
+
+                            # --- ACTION 2 : AFFICHER LES LOGS STOCKÉS ---
+                            def afficher_logs():
+                                dlg = ui.dialog()
+                                
+                                with dlg:
+                                    with ui.card().classes("p-6 space-y-3").style("width: 1100px; max-width: 95vw; height: 80vh; display: flex; flex-direction: column;"):
+                                        ui.label("📜 Logs de l'Application & Launcher").classes("text-lg font-bold text-slate-800 border-b pb-2")
+                                        
+                                        log_path = "app.log"
+                                        contenu_logs = "Aucun fichier de log trouvé."
+                                        
+                                        if os.path.exists(log_path):
+                                            try:
+                                                with open(log_path, "r", encoding="utf-8") as f:
+                                                    lignes = f.readlines()
+                                                    contenu_logs = "".join(lignes[-150:])
+                                            except Exception as ex:
+                                                contenu_logs = f"Erreur lecture des logs : {ex}"
+
+                                        ui.textarea(value=contenu_logs).props("readonly outlined autogrow").classes(
+                                            "font-mono text-sm bg-white text-black border-2 border-slate-300 flex-grow"
+                                        ).style("width: 100%; resize: none;")
+
+                                        with ui.row().classes("w-full justify-between items-center mt-4"):
+                                            def effacer_logs():
+                                                try:
+                                                    with open(log_path, "w", encoding="utf-8") as f:
+                                                        f.write("")
+                                                    ui.notify("Logs effacés !", type="info")
+                                                    dlg.close()
+                                                except Exception as e:
+                                                    ui.notify(f"Erreur : {e}", type="negative")
+
+                                            ui.button("Vider les logs", icon="delete", on_click=effacer_logs).props("flat color=negative")
+                                            ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
+                                                
+                                dlg.open()
+                            
+                            # --- ACTION 3 : DIAGNOSTIC & FICHIERS ---
+                            def afficher_infos_debug():
+                                with ui.dialog() as dlg, ui.card().classes("w-[600px] p-6 space-y-3"):
+                                    ui.label("📊 Diagnostic de l'Environnement").classes("text-lg font-bold text-slate-800 border-b pb-2")
                                     
-                                    fichiers_recents.sort(key=lambda x: x[1], reverse=True)
-                                    for nom_f, dt in fichiers_recents[:5]:
-                                        ui.label(f"- {nom_f} (Modifié le : {dt.strftime('%d/%m/%Y %H:%M:%S')})").classes("text-xs text-slate-500 font-mono")
-                                except Exception:
-                                    ui.label("Impossible de lister les fichiers récents.").classes("text-xs text-red-500")
+                                    python_version = sys.version
+                                    encoding_actuel = sys.stdout.encoding if sys.stdout else "Inconnu"
+                                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                                    
+                                    ui.label(f"• Répertoire de travail : {base_dir}").classes("text-xs text-slate-600 font-mono")
+                                    ui.label(f"• Version Python : {python_version}").classes("text-xs text-slate-600 font-mono")
+                                    
+                                    ui.label("Derniers fichiers modifiés dans le projet :").classes("font-semibold text-sm text-slate-700 mt-2")
+                                    
+                                    fichiers_recents = []
+                                    try:
+                                        for f in os.listdir(base_dir):
+                                            if f.endswith(".py") or f.endswith(".pyw"):
+                                                path_f = os.path.join(base_dir, f)
+                                                mtime = os.path.getmtime(path_f)
+                                                fichiers_recents.append((f, datetime.fromtimestamp(mtime)))
+                                        
+                                        fichiers_recents.sort(key=lambda x: x[1], reverse=True)
+                                        for nom_f, dt in fichiers_recents[:5]:
+                                            ui.label(f"- {nom_f} (Modifié le : {dt.strftime('%d/%m/%Y %H:%M:%S')})").classes("text-xs text-slate-500 font-mono")
+                                    except Exception:
+                                        ui.label("Impossible de lister les fichiers récents.").classes("text-xs text-red-500")
 
-                                with ui.row().classes("w-full justify-end mt-4"):
-                                    ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
-                            dlg.open()
+                                    with ui.row().classes("w-full justify-end mt-4"):
+                                        ui.button("Fermer", on_click=dlg.close).props("flat color=slate")
+                                dlg.open()
 
-                        # Boutons de la zone debug
-                        with ui.row().classes("gap-2 flex-wrap"):
-                            ui.button("Purger __pycache__", icon="cleaning_services", on_click=purger_caches).props("dense outline color=warning font-bold")
-                            ui.button("Afficher les logs", icon="terminal", on_click=afficher_logs).props("dense outline color=info font-bold")
-                            ui.button("Diagnostic fichiers", icon="bug_report", on_click=afficher_infos_debug).props("dense outline color=primary font-bold")
-                else:
-                    ui.notify("Code PIN incorrect.", type="negative", icon="error")
+                            # Boutons de la zone debug
+                            with ui.row().classes("gap-2 flex-wrap"):
+                                ui.button("Purger __pycache__", icon="cleaning_services", on_click=purger_caches).props("dense outline color=warning font-bold")
+                                ui.button("Afficher les logs", icon="terminal", on_click=afficher_logs).props("dense outline color=info font-bold")
+                                ui.button("Diagnostic fichiers", icon="bug_report", on_click=afficher_infos_debug).props("dense outline color=primary font-bold")
+                    else:
+                        ui.notify("Code PIN incorrect.", type="negative", icon="error")
 
-            ui.button("Déverrouiller", icon="lock_open", on_click=verifier_code).props("color=primary font-bold dense")
+                ui.button("Déverrouiller", icon="lock_open", on_click=verifier_code).props("color=primary font-bold dense")

@@ -32,7 +32,7 @@ def calculer_duree_heures(h_debut_str, h_fin_str):
         t1 = datetime.strptime(h_debut_str.strip(), fmt)
         t2 = datetime.strptime(h_fin_str.strip(), fmt)
         diff = (t2 - t1).total_seconds() / 3600.0
-        if diff < 0:  # Gère le cas où l'intervention se termine après minuit
+        if diff < 0:
             diff += 24.0
         return round(diff, 2) if diff > 0 else 1.0
     except Exception:
@@ -58,15 +58,11 @@ def render_interventions():
     with ui.card().classes(
         "w-full p-6 bg-white border border-slate-200 rounded-xl space-y-4"
     ):
-
-        # ESTHÉTIQUE & FILTRES EN HAUT
         top_bar = ui.row().classes(
             "w-full justify-between items-center mb-2 gap-4 flex-wrap"
         )
-
         selection_holder = {"selected_row": None}
 
-        # Définition statique des colonnes AG Grid
         columns = [
             {
                 "headerName": "N° Intervention",
@@ -153,7 +149,6 @@ def render_interventions():
             },
         ]
 
-        # Tableau fixe (créé une seule fois pour éviter de tout détruire au rafraîchissement)
         grid = ui.aggrid(
             {
                 "columnDefs": columns,
@@ -169,7 +164,6 @@ def render_interventions():
             }
         ).classes("h-96 w-full cursor-pointer")
 
-        # BARRE D'ACTIONS EN BAS
         with ui.row().classes(
             "w-full justify-between items-center pt-3 border-t border-slate-200 min-h-[48px]"
         ):
@@ -234,57 +228,62 @@ def render_interventions():
             filtre_annee = select_annee.value
             masquer_payees = checkbox_payees.value
 
-            conn = database.get_conn()
+            client_db = database.get_client()
             try:
-                cursor = conn.cursor()
-                cursor.execute("PRAGMA table_info(interventions)")
-                cols = [column[1] for column in cursor.fetchall()]
-                has_facture_id = "facture_id" in cols
-
-                query = f"""
-                    SELECT 
-                        i.*, 
-                        c.nom_societe AS client_nom,
-                        p.designation AS prestation_nom,
-                        e.nom_site AS etablissement_nom
-                        {', f.statut AS statut_facture' if has_facture_id else ', NULL AS facture_id, NULL AS statut_facture'}
-                    FROM interventions i
-                    JOIN clients c ON i.client_id = c.id
-                    LEFT JOIN prestations p ON i.prestation_id = p.id
-                    LEFT JOIN etablissements e ON i.etablissement_id = e.id
-                    {'LEFT JOIN factures f ON i.facture_id = f.id' if has_facture_id else ''}
-                    ORDER BY i.date DESC, i.id DESC
-                """
-                rows = conn.execute(query).fetchall()
-            finally:
-                conn.close()
+                # Requête Supabase avec jointures (clients, prestations, etablissements, factures)
+                response = (
+                    client_db.table("interventions")
+                    .select(
+                        "*, clients(nom_societe), prestations(designation), etablissements(nom_site), factures(statut)"
+                    )
+                    .order("date", desc=True)
+                    .order("id", desc=True)
+                    .execute()
+                )
+                rows = response.data or []
+            except Exception as e:
+                ui.notify(f"Erreur de chargement des interventions : {e}", type="negative")
+                rows = []
 
             prestations = []
             for r in rows:
                 item = dict(r)
+                
+                # Récupération sécurisée des données de jointure Supabase (dicts ou listes)
+                client_rel = item.get("clients")
+                item["client_nom"] = client_rel.get("nom_societe") if isinstance(client_rel, dict) else (client_rel[0].get("nom_societe") if client_rel and isinstance(client_rel, list) else "-")
+
+                prest_rel = item.get("prestations")
+                item["prestation_nom"] = prest_rel.get("designation") if isinstance(prest_rel, dict) else (prest_rel[0].get("designation") if prest_rel and isinstance(prest_rel, list) else None)
+
+                etab_rel = item.get("etablissements")
+                item["etablissement_nom"] = etab_rel.get("nom_site") if isinstance(etab_rel, dict) else (etab_rel[0].get("nom_site") if etab_rel and isinstance(etab_rel, list) else None)
+
+                fact_rel = item.get("factures")
+                statut_facture = fact_rel.get("statut") if isinstance(fact_rel, dict) else (fact_rel[0].get("statut") if fact_rel and isinstance(fact_rel, list) else None)
+                
                 statut_dyn = calculer_statut_prestation(
-                    item["date"],
+                    item.get("date"),
                     item.get("facture_id"),
-                    item.get("statut_facture"),
+                    statut_facture,
                 )
                 item["statut_dynamique"] = statut_dyn
-                item["date_fr"] = formater_date_fr(item["date"])
+                item["date_fr"] = formater_date_fr(item.get("date"))
                 item["nom_prestation_txt"] = (
                     item["prestation_nom"] or "Prestation libre"
                 )
                 item["site_txt"] = item["etablissement_nom"] or "-"
                 item["heure_txt"] = (
-                    f"{item['heure_debut'] or ''} - {item['heure_fin'] or ''}".strip(
+                    f"{item.get('heure_debut') or ''} - {item.get('heure_fin') or ''}".strip(
                         " -"
                     )
                     or "-"
                 )
                 item["prix_txt"] = (
-                    f"{(item['prix_final_ht'] or 0.0) * (item['quantite'] or 1.0):.2f} € HT"
+                    f"{(item.get('prix_final_ht') or 0.0) * (item.get('quantite') or 1.0):.2f} € HT"
                 )
-                item["commentaire_txt"] = item["commentaire"] or ""
+                item["commentaire_txt"] = item.get("commentaire") or ""
 
-                # Application des filtres Mois / Année basés sur la date (AAAA-MM-JJ)
                 date_val = str(item.get("date", "")).strip()
                 if date_val and len(date_val) >= 10:
                     annee_str = date_val[0:4]
@@ -297,14 +296,13 @@ def render_interventions():
                     continue
                 if filtre_mois != "Tous" and mois_str != filtre_mois:
                     continue
-
                 if masquer_payees and statut_dyn == "Payée":
                     continue
                 if filtre_statut != "Tous" and statut_dyn != filtre_statut:
                     continue
                 if (
                     filtre_client != "Tous"
-                    and str(item["client_id"]) != str(filtre_client)
+                    and str(item.get("client_id")) != str(filtre_client)
                 ):
                     continue
 
@@ -318,7 +316,6 @@ def render_interventions():
             with ui.row().classes("items-center gap-3 flex-wrap flex-1"):
                 ui.label("Prestations").classes("text-lg font-semibold text-slate-700")
 
-                # Options des mois
                 mois_options = {
                     "Tous": "Tous les mois",
                     "01": "Janvier",
@@ -338,18 +335,18 @@ def render_interventions():
                     mois_options, value="Tous", label="Mois"
                 ).classes("w-36")
 
-                # Récupération dynamique des années depuis la base de données
-                conn_db = database.get_conn()
+                # Récupération dynamique des années depuis Supabase
+                client_db = database.get_client()
                 try:
-                    annees_db = conn_db.execute(
-                        "SELECT DISTINCT SUBSTR(date, 1, 4) FROM interventions WHERE date IS NOT NULL AND date != '' ORDER BY date DESC"
-                    ).fetchall()
-                finally:
-                    conn_db.close()
+                    res_annees = client_db.table("interventions").select("date").execute()
+                    annees_disponibles = sorted(
+                        list(set(row["date"][:4] for row in (res_annees.data or []) if row.get("date"))),
+                        reverse=True
+                    )
+                except Exception:
+                    annees_disponibles = []
 
                 annees_options = {"Tous": "Toutes"}
-                annees_disponibles = [row[0] for row in annees_db if row[0]]
-                
                 annee_actuelle = str(datetime.now().year)
                 if not annees_disponibles:
                     annees_disponibles = [annee_actuelle]
@@ -357,7 +354,9 @@ def render_interventions():
                 for a in annees_disponibles:
                     annees_options[a] = a
 
-                val_annee_defaut = annee_actuelle if annee_actuelle in annees_disponibles else annees_disponibles[0]
+                val_annee_defaut = (
+                    annee_actuelle if annee_actuelle in annees_disponibles else annees_disponibles[0]
+                )
 
                 select_annee = ui.select(
                     annees_options,
@@ -397,7 +396,6 @@ def render_interventions():
                 on_click=lambda: ouvrir_dialog_intervention(),
             ).props("color=primary font-bold")
 
-        # LOGIQUE SÉCURITÉ ÉDITION / SUPPRESSION
         def tenter_edition():
             interv = selection_holder["selected_row"]
             if not interv:
@@ -439,7 +437,6 @@ def render_interventions():
                 statut_realisee=(statut == "Réalisée"),
             )
 
-        # DIALOGUE DE CRÉATION / ÉDITION
         def ouvrir_dialog_intervention(interv_existante=None):
             is_edition = interv_existante is not None
             titre = (
@@ -490,66 +487,63 @@ def render_interventions():
                 ).classes("w-full").props("dense outlined")
 
                 def charger_prestations_client(client_id):
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        tarifs_spec = conn.execute(
-                            """
-                            SELECT p.id, p.designation, ct.prix_specifique_ht, p.prix_ht
-                            FROM client_tarifs ct
-                            JOIN prestations p ON ct.prestation_id = p.id
-                            WHERE ct.client_id=? AND ct.est_actif=1
-                        """,
-                            (client_id,),
-                        ).fetchall()
+                        # Récupération des tarifs spécifiques
+                        res_tarifs = (
+                            client_db.table("client_tarifs")
+                            .select("prestation_id, prix_specifique_ht, prestations(id, designation, prix_ht)")
+                            .eq("client_id", client_id)
+                            .eq("est_actif", True)
+                            .execute()
+                        )
+                        tarifs_spec = res_tarifs.data or []
 
                         options = {}
                         if tarifs_spec:
                             for t in tarifs_spec:
+                                p_info = t.get("prestations") or {}
                                 px = (
                                     t["prix_specifique_ht"]
-                                    if t["prix_specifique_ht"] is not None
-                                    else t["prix_ht"]
+                                    if t.get("prix_specifique_ht") is not None
+                                    else p_info.get("prix_ht", 0.0)
                                 )
-                                options[t["id"]] = (
-                                    f"{t['designation']} ({px:.2f} €/h - Tarif"
-                                    " spécifique)"
+                                p_id = t.get("prestation_id")
+                                designation = p_info.get("designation", "Prestation")
+                                options[p_id] = (
+                                    f"{designation} ({px:.2f} €/h - Tarif spécifique)"
                                 )
                         else:
-                            cat = conn.execute(
-                                "SELECT * FROM prestations ORDER BY"
-                                " designation ASC"
-                            ).fetchall()
+                            res_cat = client_db.table("prestations").select("*").order("designation").execute()
+                            cat = res_cat.data or []
                             for p in cat:
                                 options[p["id"]] = (
-                                    f"{p['designation']} ({p['prix_ht']:.2f}"
-                                    " €/h)"
+                                    f"{p['designation']} ({p['prix_ht']:.2f} €/h)"
                                 )
-                    finally:
-                        conn.close()
+                    except Exception:
+                        options = {}
 
                     prest_select.options = options
                     val_prest_init = (
-                        interv_existante["prestation_id"]
-                        if (is_edition and interv_existante["prestation_id"])
+                        interv_existante.get("prestation_id")
+                        if (is_edition and interv_existante.get("prestation_id"))
                         else (list(options.keys())[0] if options else None)
                     )
                     prest_select.value = val_prest_init
 
                 def charger_etablissements(client_id):
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        etabs = conn.execute(
-                            "SELECT * FROM etablissements WHERE client_id=?",
-                            (client_id,),
-                        ).fetchall()
-                    finally:
-                        conn.close()
+                        res_etabs = client_db.table("etablissements").select("*").eq("client_id", client_id).execute()
+                        etabs = res_etabs.data or []
+                    except Exception:
+                        etabs = []
 
                     if etabs:
                         options = {e["id"]: e["nom_site"] for e in etabs}
                         etab_select.options = options
                         etab_select.value = (
-                            interv_existante["etablissement_id"]
+                            interv_existante.get("etablissement_id")
                             if is_edition
                             else etabs[0]["id"]
                         )
@@ -570,7 +564,7 @@ def render_interventions():
                 )
 
                 val_date_init = (
-                    interv_existante["date"]
+                    interv_existante.get("date")
                     if is_edition
                     else datetime.now().strftime("%Y-%m-%d")
                 )
@@ -586,13 +580,13 @@ def render_interventions():
                         )
 
                 val_h_deb = (
-                    interv_existante["heure_debut"]
-                    if (is_edition and interv_existante["heure_debut"])
+                    interv_existante.get("heure_debut")
+                    if (is_edition and interv_existante.get("heure_debut"))
                     else "14:00"
                 )
                 val_h_fin = (
-                    interv_existante["heure_fin"]
-                    if (is_edition and interv_existante["heure_fin"])
+                    interv_existante.get("heure_fin")
+                    if (is_edition and interv_existante.get("heure_fin"))
                     else "16:00"
                 )
 
@@ -639,8 +633,8 @@ def render_interventions():
                 remarque_input = ui.input(
                     "Remarques / Commentaire",
                     value=(
-                        interv_existante["commentaire"]
-                        if (is_edition and interv_existante["commentaire"])
+                        interv_existante.get("commentaire")
+                        if (is_edition and interv_existante.get("commentaire"))
                         else ""
                     ),
                 ).classes("w-full").props("dense outlined")
@@ -663,89 +657,59 @@ def render_interventions():
                         )
                         return
 
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        spec = conn.execute(
-                            "SELECT prix_specifique_ht FROM client_tarifs WHERE"
-                            " client_id=? AND prestation_id=?",
-                            (client_id, prest_id),
-                        ).fetchone()
-                        prest_info = conn.execute(
-                            "SELECT * FROM prestations WHERE id=?", (prest_id,)
-                        ).fetchone()
+                        # Récupération tarif spécifique ou standard
+                        res_spec = (
+                            client_db.table("client_tarifs")
+                            .select("prix_specifique_ht")
+                            .eq("client_id", client_id)
+                            .eq("prestation_id", prest_id)
+                            .execute()
+                        )
+                        spec_data = res_spec.data[0] if res_spec.data else None
+
+                        res_prest = client_db.table("prestations").select("*").eq("id", prest_id).execute()
+                        prest_info = res_prest.data[0] if res_prest.data else {}
 
                         prix_ht = (
-                            spec["prix_specifique_ht"]
+                            spec_data["prix_specifique_ht"]
                             if (
-                                spec
-                                and spec["prix_specifique_ht"] is not None
+                                spec_data
+                                and spec_data.get("prix_specifique_ht") is not None
                             )
                             else (
-                                prest_info["prix_ht"] if prest_info else 0.0
+                                prest_info.get("prix_ht", 0.0)
                             )
                         )
-                        taux_tva = prest_info["taux_tva"] if prest_info else 0.0
+                        taux_tva = prest_info.get("taux_tva", 0.0)
 
-                        cur = conn.cursor()
+                        payload = {
+                            "client_id": client_id,
+                            "etablissement_id": etab_id,
+                            "prestation_id": prest_id,
+                            "date": date_val,
+                            "heure_debut": h_debut.value,
+                            "heure_fin": h_fin.value,
+                            "quantite": qte_calc,
+                            "prix_final_ht": prix_ht,
+                            "taux_tva": taux_tva,
+                            "commentaire": remarque_input.value,
+                        }
+
                         if is_edition:
-                            cur.execute(
-                                """
-                                UPDATE interventions SET
-                                    client_id=?, etablissement_id=?, prestation_id=?, date=?, 
-                                    heure_debut=?, heure_fin=?, quantite=?, prix_final_ht=?, taux_tva=?, commentaire=?
-                                WHERE id=?
-                            """,
-                                (
-                                    client_id,
-                                    etab_id,
-                                    prest_id,
-                                    date_val,
-                                    h_debut.value,
-                                    h_fin.value,
-                                    qte_calc,
-                                    prix_ht,
-                                    taux_tva,
-                                    remarque_input.value,
-                                    interv_existante["id"],
-                                ),
-                            )
-                            ui.notify(
-                                "Prestation mise à jour !", type="positive"
-                            )
+                            client_db.table("interventions").update(payload).eq("id", interv_existante["id"]).execute()
+                            ui.notify("Prestation mise à jour !", type="positive")
                         else:
-                            num_interv = database.generer_numero_document(
-                                "PREST"
-                            )
-                            cur.execute(
-                                """
-                                INSERT INTO interventions (
-                                    numero_intervention, client_id, etablissement_id, prestation_id, date,
-                                    heure_debut, heure_fin, quantite, prix_final_ht, taux_tva, statut, commentaire
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                            """,
-                                (
-                                    num_interv,
-                                    client_id,
-                                    etab_id,
-                                    prest_id,
-                                    date_val,
-                                    h_debut.value,
-                                    h_fin.value,
-                                    qte_calc,
-                                    prix_ht,
-                                    taux_tva,
-                                    remarque_input.value,
-                                ),
-                            )
-                            ui.notify(
-                                f"Prestation {num_interv} créée !",
-                                type="positive",
-                            )
+                            num_interv = database.generer_numero_document("PREST")
+                            payload["numero_intervention"] = num_interv
+                            payload["statut"] = "En attente"
+                            client_db.table("interventions").insert(payload).execute()
+                            ui.notify(f"Prestation {num_interv} créée !", type="positive")
 
-                        conn.commit()
-                    finally:
-                        conn.close()
+                    except Exception as e:
+                        ui.notify(f"Erreur lors de la sauvegarde : {e}", type="negative")
+                        return
 
                     dialog.close()
                     charger_donnees()
@@ -784,18 +748,14 @@ def render_interventions():
                     ).classes("text-slate-600")
 
                 def supprimer():
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        conn.execute(
-                            "DELETE FROM interventions WHERE id=?", (interv_id,)
-                        )
-                        conn.commit()
-                    finally:
-                        conn.close()
-
-                    dialog.close()
-                    ui.notify("Prestation supprimée.", type="info")
-                    charger_donnees()
+                        client_db.table("interventions").delete().eq("id", interv_id).execute()
+                        dialog.close()
+                        ui.notify("Prestation supprimée.", type="info")
+                        charger_donnees()
+                    except Exception as e:
+                        ui.notify(f"Erreur lors de la suppression : {e}", type="negative")
 
                 with ui.row().classes("w-full justify-end gap-2"):
                     ui.button("Annuler", on_click=dialog.close).props(
@@ -807,5 +767,4 @@ def render_interventions():
 
             dialog.open()
 
-        # Premier chargement au rendu (par défaut sur l'année en cours pour ne pas surcharger)
         charger_donnees()

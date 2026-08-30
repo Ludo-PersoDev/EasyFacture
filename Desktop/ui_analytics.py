@@ -18,13 +18,13 @@ def render_analytics():
     ui.label("Tableau de Bord & Analytics Financier").classes("text-2xl font-bold text-slate-800 mb-6")
 
     # --- 1. RÉCUPÉRATION DES ANNÉES DISPONIBLES ---
-    conn = database.get_conn()
-    rows_factures = conn.execute("SELECT * FROM factures WHERE date_creation IS NOT NULL AND date_creation != ''").fetchall()
-    conn.close()
+    supabase = database.get_db()
+    rows_res = supabase.table("factures").select("date_creation").not_.is_("date_creation", "null").execute()
+    rows_factures = rows_res.data
 
     annees_trouvees = set()
     for r in rows_factures:
-        d = parse_date(r['date_creation'])
+        d = parse_date(r.get('date_creation'))
         if d:
             annees_trouvees.add(str(d.year))
 
@@ -168,13 +168,20 @@ def render_analytics():
         selected_annee = filtre_annee.value
         selected_mois = filtre_mois.value
 
-        conn = database.get_conn()
-        all_factures = conn.execute("""
-            SELECT f.*, c.nom_societe, c.contact, c.telephone, c.email
-            FROM factures f
-            JOIN clients c ON f.client_id = c.id
-            WHERE f.statut != 'Annulée'
-        """).fetchall()
+        sup = database.get_supabase()
+        res = sup.table("factures").select(
+            "*, clients(nom_societe, contact, telephone, email)"
+        ).neq("statut", "Annulée").execute()
+
+        all_factures = []
+        for row in res.data:
+            c = row.get("clients") or {}
+            f_dict = {**row}
+            f_dict['nom_societe'] = c.get('nom_societe')
+            f_dict['contact'] = c.get('contact')
+            f_dict['telephone'] = c.get('telephone')
+            f_dict['email'] = c.get('email')
+            all_factures.append(f_dict)
 
         aujourdhui = datetime.now().date()
         total_ca_ht, total_encaisse_ttc, total_retard_ttc, total_attente_ttc = 0.0, 0.0, 0.0, 0.0
@@ -184,7 +191,7 @@ def render_analytics():
         modes_stats = {}  # Pour le camembert
 
         for f in all_factures:
-            d_creation = parse_date(f['date_creation'])
+            d_creation = parse_date(f.get('date_creation'))
             if not d_creation:
                 continue
 
@@ -193,14 +200,12 @@ def render_analytics():
             if selected_mois != 'Tous' and f"{d_creation.month:02d}" != str(selected_mois):
                 continue
 
-            facture_dict = dict(f)
-            statut = f['statut']
-            ttc = f['total_ttc'] or 0.0
-            ht = f['total_ht'] or 0.0
-            client_nom = f['nom_societe']
+            statut = f.get('statut')
+            ttc = f.get('total_ttc') or 0.0
+            ht = f.get('total_ht') or 0.0
+            client_nom = f.get('nom_societe') or 'Client Inconnu'
             
-            # --- CORRECTION ICI : Accès sécurisé à la colonne mode_reglement dans sqlite3.Row ---
-            mode_regl = facture_dict.get('mode_reglement') or 'Non spécifié'
+            mode_regl = f.get('mode_reglement') or 'Non spécifié'
 
             if client_nom not in clients_stats:
                 clients_stats[client_nom] = {
@@ -220,20 +225,17 @@ def render_analytics():
                 total_encaisse_ttc += ttc
                 clients_stats[client_nom]['paye_ttc'] += ttc
 
-                # Stats globale des modes de règlement
                 modes_stats[mode_regl] = modes_stats.get(mode_regl, 0.0) + ttc
-
-                # Stats par client des modes de règlement
                 clients_stats[client_nom]['modes'][mode_regl] = clients_stats[client_nom]['modes'].get(mode_regl, 0.0) + ttc
 
             elif statut == 'Émise':
-                date_ech = parse_date(f['date_echeance'])
+                date_ech = parse_date(f.get('date_echeance'))
                 if date_ech and date_ech < aujourdhui:
                     jours_retard = (aujourdhui - date_ech).days
-                    facture_dict['jours_retard'] = jours_retard
+                    f['jours_retard'] = jours_retard
                     total_retard_ttc += ttc
                     nb_retards += 1
-                    factures_en_retard.append(facture_dict)
+                    factures_en_retard.append(f)
                     clients_stats[client_nom]['retard_ttc'] += ttc
                 else:
                     total_attente_ttc += ttc
@@ -268,9 +270,9 @@ def render_analytics():
             ca_annee_n1 = [0.0] * 12
 
             for f in all_factures:
-                d = parse_date(f['date_creation'])
-                if d and f['statut'] != 'Annulée':
-                    ht = f['total_ht'] or 0.0
+                d = parse_date(f.get('date_creation'))
+                if d and f.get('statut') != 'Annulée':
+                    ht = f.get('total_ht') or 0.0
                     m_idx = d.month - 1
                     if d.year == annee_num:
                         ca_annee_sel[m_idx] += ht
@@ -279,16 +281,14 @@ def render_analytics():
         else:
             monthly_sums = {}
             for f in all_factures:
-                d = parse_date(f['date_creation'])
-                if d and f['statut'] != 'Annulée':
+                d = parse_date(f.get('date_creation'))
+                if d and f.get('statut') != 'Annulée':
                     key = f"{d.year}-{d.month:02d}"
-                    monthly_sums[key] = monthly_sums.get(key, 0.0) + (f['total_ht'] or 0.0)
+                    monthly_sums[key] = monthly_sums.get(key, 0.0) + (f.get('total_ht') or 0.0)
             
             for k in sorted(monthly_sums.keys()):
                 labels_graph.append(k)
                 ca_annee_sel.append(round(monthly_sums[k], 2))
-
-        conn.close()
 
         if comparaison_active:
             chip_comp.set_text(f"Comparaison : {selected_annee} vs {int(selected_annee)-1}")
@@ -354,7 +354,7 @@ def render_analytics():
         rows_retard = []
         for fr in factures_en_retard:
             item = dict(fr)
-            item['total_ttc_txt'] = f"{item['total_ttc']:.2f} €"
+            item['total_ttc_txt'] = f"{item.get('total_ttc', 0.0):.2f} €"
             item['jours_retard_txt'] = f"+{item['jours_retard']} jrs"
             rows_retard.append(item)
 
@@ -384,10 +384,10 @@ def render_analytics():
     def update_retard_actions():
         if grid_retard.selected:
             f_sel = grid_retard.selected[0]
-            label_sel_retard.set_text(f"Facture {f_sel['numero_facture']} ({f_sel['nom_societe']}) - Total : {f_sel['total_ttc_txt']}")
+            label_sel_retard.set_text(f"Facture {f_sel.get('numero_facture')} ({f_sel.get('nom_societe')}) - Total : {f_sel.get('total_ttc_txt')}")
             buttons_retard.clear()
             with buttons_retard:
-                ui.button("Marquer comme Payée", icon="check_circle", on_click=lambda: marquer_comme_payee(f_sel['id'])).props("color=positive dense")
+                ui.button("Marquer comme Payée", icon="check_circle", on_click=lambda: marquer_comme_payee(f_sel.get('id'))).props("color=positive dense")
                 ui.button("Coordonnées Client", icon="contact_phone", on_click=lambda: afficher_contact_client(f_sel)).props("outline color=slate dense")
             actions_bar_retard.set_visibility(True)
         else:
@@ -399,26 +399,24 @@ def render_analytics():
 
     def marquer_comme_payee(facture_id):
         date_jour = datetime.now().strftime("%Y-%m-%d")
-        conn = database.get_conn()
-        conn.execute("UPDATE factures SET statut='Payée', date_paiement=? WHERE id=?", (date_jour, facture_id))
-        conn.commit()
-        conn.close()
+        sup = database.get_supabase()
+        sup.table("factures").update({"statut": "Payée", "date_paiement": date_jour}).eq("id", facture_id).execute()
         ui.notify("Paiement enregistré avec succès !", type="positive")
         rafraichir_dashboard()
 
     def afficher_contact_client(facture_info):
         with ui.dialog() as dialog, ui.card().classes("p-6 space-y-4 max-w-md w-full"):
             ui.label("Coordonnées de Relance").classes("text-lg font-bold text-slate-800 border-b pb-2")
-            ui.label(f"Client : {facture_info['nom_societe']}").classes("font-semibold text-slate-700")
+            ui.label(f"Client : {facture_info.get('nom_societe')}").classes("font-semibold text-slate-700")
             if facture_info.get('contact'):
-                ui.label(f"Contact référent : {facture_info['contact']}").classes("text-sm text-slate-600")
+                ui.label(f"Contact référent : {facture_info.get('contact')}").classes("text-sm text-slate-600")
             with ui.column().classes("w-full p-4 bg-slate-50 border rounded-lg space-y-2 mt-2"):
                 with ui.row().classes("items-center gap-2 text-slate-700"):
                     ui.icon("email", size="18px")
-                    ui.label(facture_info['email'] or "Non renseigné").classes("text-sm font-medium")
+                    ui.label(facture_info.get('email') or "Non renseigné").classes("text-sm font-medium")
                 with ui.row().classes("items-center gap-2 text-slate-700"):
                     ui.icon("phone", size="18px")
-                    ui.label(facture_info['telephone'] or "Non renseigné").classes("text-sm font-medium")
+                    ui.label(facture_info.get('telephone') or "Non renseigné").classes("text-sm font-medium")
             with ui.row().classes("w-full justify-end mt-4"):
                 ui.button("Fermer", on_click=dialog.close).props("flat color=slate")
         dialog.open()

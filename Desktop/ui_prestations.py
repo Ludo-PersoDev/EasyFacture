@@ -25,9 +25,10 @@ def render_prestations():
         def rafraichir_liste():
             table_container.clear()
             
-            conn = database.get_conn()
-            rows = conn.execute("SELECT * FROM prestations ORDER BY designation ASC").fetchall()
-            conn.close()
+            # --- SUPABASE : Récupération des prestations triées par désignation ---
+            supabase = database.get_client()
+            response = supabase.table("prestations").select("*").order("designation", desc=False).execute()
+            rows = response.data if response.data else []
 
             prestations = []
             for r in rows:
@@ -148,26 +149,24 @@ def render_prestations():
                         return
 
                     taux_tva_final = 0.0 if entreprise_exoneree else float(tva_in.value or 0.0)
+                    
+                    # --- SUPABASE : Préparation des données ---
+                    data_payload = {
+                        "designation": desig_in.value.strip(),
+                        "unite": unite_in.value,
+                        "prix_ht": float(prix_in.value or 0.0),
+                        "taux_tva": taux_tva_final
+                    }
 
-                    conn = database.get_conn()
-                    cursor = conn.cursor()
+                    supabase = database.get_client()
 
                     if is_edit:
-                        cursor.execute("""
-                            UPDATE prestations 
-                            SET designation=?, unite=?, prix_ht=?, taux_tva=?
-                            WHERE id=?
-                        """, (desig_in.value.strip(), unite_in.value, float(prix_in.value or 0.0), taux_tva_final, prestation['id']))
+                        supabase.table("prestations").update(data_payload).eq("id", prestation['id']).execute()
                         ui.notify("Prestation modifiée avec succès !", type="positive")
                     else:
-                        cursor.execute("""
-                            INSERT INTO prestations (designation, unite, prix_ht, taux_tva)
-                            VALUES (?, ?, ?, ?)
-                        """, (desig_in.value.strip(), unite_in.value, float(prix_in.value or 0.0), taux_tva_final))
+                        supabase.table("prestations").insert(data_payload).execute()
                         ui.notify("Nouvelle prestation ajoutée au catalogue !", type="positive")
 
-                    conn.commit()
-                    conn.close()
                     dialog.close()
                     rafraichir_liste()
 
@@ -184,10 +183,10 @@ def render_prestations():
                 ui.label(f"Voulez-vous vraiment supprimer la prestation « {designation} » ?").classes("text-slate-600")
 
                 def supprimer():
-                    conn = database.get_conn()
-                    conn.execute("DELETE FROM prestations WHERE id=?", (prestation_id,))
-                    conn.commit()
-                    conn.close()
+                    # --- SUPABASE : Suppression par ID ---
+                    supabase = database.get_client()
+                    supabase.table("prestations").delete().eq("id", prestation_id).execute()
+                    
                     dialog.close()
                     ui.notify("Prestation supprimée.", type="info")
                     rafraichir_liste()

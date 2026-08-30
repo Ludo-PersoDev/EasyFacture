@@ -13,7 +13,7 @@ ui.add_head_html('''
         display: none !important;
     }
 </style>
-''')
+''', shared=True)
 
 def render_clients():
     with ui.row().classes("w-full justify-between items-center mb-6"):
@@ -42,28 +42,29 @@ def render_clients():
         def rafraichir_liste():
             table_container.clear()
 
-            conn = database.get_conn()
-            rows = conn.execute("SELECT * FROM clients ORDER BY nom_societe ASC").fetchall()
-            conn.close()
+            # Adaptation Supabase : Récupération via le client Supabase
+            supabase = database.get_db()
+            response = supabase.table("clients").select("*").order("nom_societe", desc=False).execute()
+            rows = response.data if response and hasattr(response, 'data') else []
 
             clients = []
             for r in rows:
                 item = dict(r)
-                item['type_client'] = "Particulier" if item['est_particulier'] else "Professionnel"
-                item['multisite_txt'] = "Oui" if item['multi_etab'] else "Non"
-                item['recap_txt'] = "Oui" if item['recap_interventions'] else "Non"
+                item['type_client'] = "Particulier" if item.get('est_particulier') else "Professionnel"
+                item['multisite_txt'] = "Oui" if item.get('multi_etab') else "Non"
+                item['recap_txt'] = "Oui" if item.get('recap_interventions') else "Non"
                 
                 # Formatage adresse
-                item['adresse_txt'] = item['adresse'] or "-"
-                if item['cp'] or item['ville']:
-                    item['cp_ville_txt'] = f"{item['cp'] or ''} {item['ville'] or ''}".strip()
+                item['adresse_txt'] = item.get('adresse') or "-"
+                if item.get('cp') or item.get('ville'):
+                    item['cp_ville_txt'] = f"{item.get('cp') or ''} {item.get('ville') or ''}".strip()
                 else:
                     item['cp_ville_txt'] = "-"
 
                 # Contact
-                item['contact_nom'] = item['contact'] or "-"
-                item['contact_email'] = item['email'] or ""
-                item['contact_tel'] = item['telephone'] or ""
+                item['contact_nom'] = item.get('contact') or "-"
+                item['contact_email'] = item.get('email') or ""
+                item['contact_tel'] = item.get('telephone') or ""
 
                 clients.append(item)
 
@@ -338,7 +339,6 @@ def render_clients():
                                     ui.label(selected_pdf["name"]).classes('font-bold text-slate-700 text-base')
                                     ui.button(icon="close", on_click=viewer_dialog.close).props('flat dense')
                                 
-                                # L'iframe prend tout l'espace restant de la carte
                                 ui.element('iframe').props(f'src="{pdf_url}"').classes('w-full flex-grow border-0 rounded-lg')
                             viewer_dialog.open()
                         else:
@@ -349,7 +349,7 @@ def render_clients():
 
             dialog.open()
 
-        # --- MODALE CRÉATION / ÉDITION CLIENT (2 COLONNES & CHAMPS PRO GRISÉS) ---
+        # --- MODALE CRÉATION / ÉDITION CLIENT ---
         def ouvrir_dialogue_client(client=None):
             is_edit = client is not None
             titre = "Modifier le client" if is_edit else "Nouveau client"
@@ -357,7 +357,7 @@ def render_clients():
             with ui.dialog() as dialog, ui.card().classes("w-full max-w-4xl p-6 space-y-4"):
                 ui.label(titre).classes("text-xl font-bold text-slate-800 border-b pb-2")
 
-                is_particulier_check = ui.checkbox("Client Particulier", value=bool(client['est_particulier']) if is_edit else False)
+                is_particulier_check = ui.checkbox("Client Particulier", value=bool(client.get('est_particulier')) if is_edit else False)
 
                 with ui.row().classes("w-full gap-6 items-start"):
                     
@@ -365,17 +365,17 @@ def render_clients():
                     with ui.column().classes("flex-1 gap-4"):
                         ui.label("Coordonnées générales").classes("text-xs font-bold text-slate-500 uppercase")
                         
-                        nom_in = ui.input("Nom de la Société / Nom Complet *", value=client['nom_societe'] if is_edit else "").classes("w-full")
-                        contact_in = ui.input("Nom du Contact Référent", value=client['contact'] if is_edit else "").classes("w-full")
+                        nom_in = ui.input("Nom de la Société / Nom Complet *", value=client.get('nom_societe') if is_edit else "").classes("w-full")
+                        contact_in = ui.input("Nom du Contact Référent", value=client.get('contact') if is_edit else "").classes("w-full")
 
                         with ui.row().classes("w-full gap-2"):
-                            email_in = ui.input("Email", value=client['email'] if is_edit else "").classes("flex-1")
-                            tel_in = ui.input("Téléphone", value=client['telephone'] if is_edit else "").classes("flex-1")
+                            email_in = ui.input("Email", value=client.get('email') if is_edit else "").classes("flex-1")
+                            tel_in = ui.input("Téléphone", value=client.get('telephone') if is_edit else "").classes("flex-1")
 
-                        adresse_in = ui.input("Adresse", value=client['adresse'] if is_edit else "").classes("w-full")
+                        adresse_in = ui.input("Adresse", value=client.get('adresse') if is_edit else "").classes("w-full")
                         with ui.row().classes("w-full gap-2"):
-                            cp_in = ui.input("Code Postal", value=client['cp'] if is_edit else "").classes("w-1/3")
-                            ville_in = ui.input("Ville", value=client['ville'] if is_edit else "").classes("w-2/3")
+                            cp_in = ui.input("Code Postal", value=client.get('cp') if is_edit else "").classes("w-1/3")
+                            ville_in = ui.input("Ville", value=client.get('ville') if is_edit else "").classes("w-2/3")
 
                     # Colonne Droite
                     with ui.column().classes("flex-1 gap-4"):
@@ -385,19 +385,19 @@ def render_clients():
                             ui.label("Informations Professionnelles").classes("text-xs font-bold text-slate-500 uppercase")
                             
                             with ui.row().classes("w-full gap-2"):
-                                siret_in = ui.input("SIRET", value=client['siret'] if is_edit else "").classes("flex-1")
-                                tva_in = ui.input("N° TVA Intracom", value=client['tva_intra'] if is_edit else "").classes("flex-1")
+                                siret_in = ui.input("SIRET", value=client.get('siret') if is_edit else "").classes("flex-1")
+                                tva_in = ui.input("N° TVA Intracom", value=client.get('tva_intra') if is_edit else "").classes("flex-1")
                             with ui.row().classes("w-full gap-2"):
-                                rcs_in = ui.input("RCS / RM", value=client['rcs'] if is_edit else "").classes("flex-1")
-                                ape_in = ui.input("APE / NAF", value=client['ape'] if is_edit else "").classes("flex-1")
+                                rcs_in = ui.input("RCS / RM", value=client.get('rcs') if is_edit else "").classes("flex-1")
+                                ape_in = ui.input("APE / NAF", value=client.get('ape') if is_edit else "").classes("flex-1")
 
                         options_container = ui.column().classes("w-full p-4 bg-slate-50 border rounded-xl gap-2 transition-all")
                         with options_container:
                             ui.label("Options de facturation & Gestion").classes("text-xs font-bold text-slate-500 uppercase")
                             
-                            sans_tva_check = ui.checkbox("Exonérer ce client de TVA (Facturation HT)", value=bool(client['sans_tva']) if is_edit else False)
-                            recap_check = ui.checkbox("Générer auto. le PDF Récapitulatif", value=bool(client['recap_interventions']) if is_edit else False)
-                            multi_check = ui.checkbox("Client Multisite (Gestion d'établissements)", value=bool(client['multi_etab']) if is_edit else False)
+                            sans_tva_check = ui.checkbox("Exonérer ce client de TVA (Facturation HT)", value=bool(client.get('sans_tva')) if is_edit else False)
+                            recap_check = ui.checkbox("Générer auto. le PDF Récapitulatif", value=bool(client.get('recap_interventions')) if is_edit else False)
+                            multi_check = ui.checkbox("Client Multisite (Gestion d'établissements)", value=bool(client.get('multi_etab')) if is_edit else False)
                             
                             ui.label("Modèle de facture :").classes("text-xs font-bold text-slate-500 mt-2")
                             valeur_modele_actuelle = client.get('modele_facture', 'condense') if is_edit else 'condense'
@@ -453,52 +453,39 @@ def render_clients():
                         ui.notify("Le nom / raison sociale est obligatoire.", type="warning")
                         return
 
-                    est_part = int(is_particulier_check.value)
-                    sans_tva_val = 0 if est_part else int(sans_tva_check.value)
-                    recap_val = 0 if est_part else int(recap_check.value)
-                    multi_val = 0 if est_part else int(multi_check.value)
+                    est_part = bool(is_particulier_check.value)
+                    sans_tva_val = False if est_part else bool(sans_tva_check.value)
+                    recap_val = False if est_part else bool(recap_check.value)
+                    multi_val = False if est_part else bool(multi_check.value)
                     modele_val = 'condense' if est_part else (modele_facture_select.value or 'condense')
 
-                    conn = database.get_conn()
-                    cursor = conn.cursor()
+                    data_dict = {
+                        "nom_societe": nom_in.value.strip(),
+                        "contact": contact_in.value,
+                        "adresse": adresse_in.value,
+                        "cp": cp_in.value,
+                        "ville": ville_in.value,
+                        "email": email_in.value,
+                        "telephone": tel_in.value,
+                        "est_particulier": est_part,
+                        "siret": "" if est_part else siret_in.value,
+                        "tva_intra": "" if est_part else tva_in.value,
+                        "rcs": "" if est_part else rcs_in.value,
+                        "ape": "" if est_part else ape_in.value,
+                        "sans_tva": sans_tva_val,
+                        "recap_interventions": recap_val,
+                        "multi_etab": multi_val,
+                        "modele_facture": modele_val
+                    }
 
+                    supabase = database.get_db()
                     if is_edit:
-                        cursor.execute("""
-                            UPDATE clients SET
-                                nom_societe=?, contact=?, adresse=?, cp=?, ville=?, email=?, telephone=?,
-                                est_particulier=?, siret=?, tva_intra=?, rcs=?, ape=?,
-                                sans_tva=?, recap_interventions=?, multi_etab=?, modele_facture=?
-                            WHERE id=?
-                        """, (
-                            nom_in.value.strip(), contact_in.value, adresse_in.value, cp_in.value, ville_in.value, email_in.value, tel_in.value,
-                            est_part, 
-                            "" if est_part else siret_in.value, 
-                            "" if est_part else tva_in.value, 
-                            "" if est_part else rcs_in.value, 
-                            "" if est_part else ape_in.value,
-                            sans_tva_val, recap_val, multi_val, modele_val, client['id']
-                        ))
+                        supabase.table("clients").update(data_dict).eq("id", client['id']).execute()
                         ui.notify("Fiche client mise à jour !", type="positive")
                     else:
-                        cursor.execute("""
-                            INSERT INTO clients (
-                                nom_societe, contact, adresse, cp, ville, email, telephone,
-                                est_particulier, siret, tva_intra, rcs, ape,
-                                sans_tva, recap_interventions, multi_etab, modele_facture
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            nom_in.value.strip(), contact_in.value, adresse_in.value, cp_in.value, ville_in.value, email_in.value, tel_in.value,
-                            est_part, 
-                            "" if est_part else siret_in.value, 
-                            "" if est_part else tva_in.value, 
-                            "" if est_part else rcs_in.value, 
-                            "" if est_part else ape_in.value,
-                            sans_tva_val, recap_val, multi_val, modele_val
-                        ))
+                        supabase.table("clients").insert(data_dict).execute()
                         ui.notify("Nouveau client créé !", type="positive")
 
-                    conn.commit()
-                    conn.close()
                     dialog.close()
                     rafraichir_liste()
 
@@ -526,9 +513,9 @@ def render_clients():
 
                 def rafraichir_sites():
                     sites_container.clear()
-                    conn = database.get_conn()
-                    sites = conn.execute("SELECT * FROM etablissements WHERE client_id=? ORDER BY nom_site ASC", (client['id'],)).fetchall()
-                    conn.close()
+                    supabase = database.get_db()
+                    resp = supabase.table("etablissements").select("*").eq("client_id", client['id']).order("nom_site", desc=False).execute()
+                    sites = resp.data if resp and hasattr(resp, 'data') else []
 
                     with sites_container:
                         if not sites:
@@ -537,7 +524,7 @@ def render_clients():
                             with ui.row().classes("w-full justify-between items-center p-3 bg-slate-50 border rounded-lg"):
                                 with ui.column().classes("gap-0 flex-1"):
                                     ui.label(s['nom_site']).classes("font-bold text-slate-800")
-                                    ui.label(f"{s['adresse']}, {s['cp']} {s['ville']}").classes("text-xs text-slate-500")
+                                    ui.label(f"{s.get('adresse','')}, {s.get('cp','')} {s.get('ville','')}").classes("text-xs text-slate-500")
                                 
                                 with ui.row().classes("gap-1"):
                                     ui.button(icon="edit", color="primary", on_click=lambda site=s: charger_pour_edition(site)).props("flat round dense")
@@ -546,9 +533,9 @@ def render_clients():
                 def charger_pour_edition(site):
                     site_edite["id"] = site['id']
                     site_nom.value = site['nom_site']
-                    site_adr.value = site['adresse']
-                    site_cp.value = site['cp']
-                    site_ville.value = site['ville']
+                    site_adr.value = site.get('adresse', '')
+                    site_cp.value = site.get('cp', '')
+                    site_ville.value = site.get('ville', '')
                     btn_ajouter.set_text("Modifier ce site")
                     btn_ajouter.props("color=primary")
 
@@ -566,26 +553,28 @@ def render_clients():
                         ui.notify("Veuillez donner un nom au site.", type="warning")
                         return
 
-                    conn = database.get_conn()
+                    supabase = database.get_db()
+                    data_site = {
+                        "client_id": client['id'],
+                        "nom_site": site_nom.value.strip(),
+                        "adresse": site_adr.value,
+                        "cp": site_cp.value,
+                        "ville": site_ville.value
+                    }
+
                     if site_edite["id"]:
-                        conn.execute("UPDATE etablissements SET nom_site=?, adresse=?, cp=?, ville=? WHERE id=?",
-                                   (site_nom.value.strip(), site_adr.value, site_cp.value, site_ville.value, site_edite["id"]))
+                        supabase.table("etablissements").update(data_site).eq("id", site_edite["id"]).execute()
                         ui.notify("Site mis à jour !", type="positive")
                     else:
-                        conn.execute("INSERT INTO etablissements (client_id, nom_site, adresse, cp, ville) VALUES (?, ?, ?, ?, ?)",
-                                   (client['id'], site_nom.value.strip(), site_adr.value, site_cp.value, site_ville.value))
+                        supabase.table("etablissements").insert(data_site).execute()
                         ui.notify("Nouveau site ajouté !", type="positive")
 
-                    conn.commit()
-                    conn.close()
                     reinitialiser_form_site()
                     rafraichir_sites()
 
                 def supprimer_site(site_id):
-                    conn = database.get_conn()
-                    conn.execute("DELETE FROM etablissements WHERE id=?", (site_id,))
-                    conn.commit()
-                    conn.close()
+                    supabase = database.get_db()
+                    supabase.table("etablissements").delete().eq("id", site_id).execute()
                     reinitialiser_form_site()
                     rafraichir_sites()
 
@@ -602,12 +591,13 @@ def render_clients():
                 ui.label(f"Catalogue & Tarifs client : {client['nom_societe']}").classes("text-lg font-bold text-slate-800 border-b pb-2")
                 ui.label("Cochez les prestations réalisables chez ce client et ajustez leurs prix si nécessaire.").classes("text-xs text-slate-500")
 
-                conn = database.get_conn()
-                prestations = conn.execute("SELECT * FROM prestations ORDER BY designation ASC").fetchall()
+                supabase = database.get_db()
+                resp_prest = supabase.table("prestations").select("*").order("designation", desc=False).execute()
+                prestations = resp_prest.data if resp_prest and hasattr(resp_prest, 'data') else []
                 
-                tarifs_rows = conn.execute("SELECT * FROM client_tarifs WHERE client_id=?", (client['id'],)).fetchall()
+                resp_tarifs = supabase.table("client_tarifs").select("*").eq("client_id", client['id']).execute()
+                tarifs_rows = resp_tarifs.data if resp_tarifs and hasattr(resp_tarifs, 'data') else []
                 tarifs_existants = {r['prestation_id']: dict(r) for r in tarifs_rows}
-                conn.close()
 
                 inputs_tarifs = {}
 
@@ -620,14 +610,14 @@ def render_clients():
                         tarif_custom = tarifs_existants.get(p_id)
                         
                         est_actif = bool(tarif_custom['est_actif']) if (tarif_custom and 'est_actif' in tarif_custom and tarif_custom['est_actif'] is not None) else True
-                        prix_val = tarif_custom['prix_specifique_ht'] if (tarif_custom and tarif_custom['prix_specifique_ht'] is not None) else p['prix_ht']
+                        prix_val = tarif_custom['prix_specifique_ht'] if (tarif_custom and tarif_custom['prix_specifique_ht'] is not None) else p.get('prix_ht', 0.0)
 
                         with ui.row().classes("w-full justify-between items-center p-3 bg-slate-50 border rounded-lg gap-4"):
                             actif_check = ui.checkbox(value=est_actif).props("dense")
                             
                             with ui.column().classes("flex-1 gap-0"):
                                 ui.label(p['designation']).classes("font-bold text-slate-800 text-sm")
-                                ui.label(f"Standard : {p['prix_ht']:.2f} € / {p['unite']}").classes("text-xs text-slate-500")
+                                ui.label(f"Standard : {p.get('prix_ht', 0.0):.2f} € / {p.get('unite', '')}").classes("text-xs text-slate-500")
 
                             num_in = ui.number(label="Prix HT Client (€)", value=prix_val, format="%.2f").classes("w-36")
                             
@@ -644,20 +634,19 @@ def render_clients():
                             inputs_tarifs[p_id] = {"actif": actif_check, "prix": num_in}
 
                 def enregistrer_tarifs():
-                    conn = database.get_conn()
-                    cursor = conn.cursor()
+                    supabase = database.get_db()
                     for p_id, items in inputs_tarifs.items():
                         nouveau_prix = float(items["prix"].value or 0.0)
-                        is_active = 1 if items["actif"].value else 0
-                        cursor.execute("""
-                            INSERT INTO client_tarifs (client_id, prestation_id, prix_specifique_ht, est_actif)
-                            VALUES (?, ?, ?, ?)
-                            ON CONFLICT(client_id, prestation_id) DO UPDATE SET 
-                                prix_specifique_ht=excluded.prix_specifique_ht,
-                                est_actif=excluded.est_actif
-                        """, (client['id'], p_id, nouveau_prix, is_active))
-                    conn.commit()
-                    conn.close()
+                        is_active = bool(items["actif"].value)
+                        
+                        # Upsert compatible Supabase
+                        supabase.table("client_tarifs").upsert({
+                            "client_id": client['id'],
+                            "prestation_id": p_id,
+                            "prix_specifique_ht": nouveau_prix,
+                            "est_actif": is_active
+                        }, on_conflict="client_id,prestation_id").execute()
+
                     ui.notify("Catalogue et tarifs du client enregistrés !", type="positive")
                     dialog.close()
 
@@ -674,10 +663,8 @@ def render_clients():
                 ui.label(f"Voulez-vous supprimer le client « {nom_client} » et toutes ses données associées ?").classes("text-slate-600")
 
                 def supprimer():
-                    conn = database.get_conn()
-                    conn.execute("DELETE FROM clients WHERE id=?", (client_id,))
-                    conn.commit()
-                    conn.close()
+                    supabase = database.get_db()
+                    supabase.table("clients").delete().eq("id", client_id).execute()
                     dialog.close()
                     ui.notify("Client supprimé.", type="info")
                     rafraichir_liste()

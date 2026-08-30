@@ -126,7 +126,7 @@ def envoyer_email_depot_smtp(dest_email, liste_factures, config_smtp):
 def render_passerelle_export():
       with ui.row().classes("w-full justify-between items-center mb-6"):  
           ui.label('Passerelle Factur-X & Dématérialisation').classes(
-              'text-2xl font-bold text-slate-800 mb-6'
+              'text-2xl font-bold text-slate-800'
           )
           ui.button("Infos Importantes", icon="warning", on_click=lambda: afficher_note_importante(
             "Points d'attention - Passerelle de transmission",

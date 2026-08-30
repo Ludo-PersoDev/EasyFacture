@@ -10,7 +10,7 @@ import codecs
 
 if sys.stdout.encoding != 'utf-8':
     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-    
+
 def formater_date_fr(date_str):
     """Convertit AAAA-MM-JJ en JJ/MM/AAAA pour l'affichage."""
     if not date_str:
@@ -37,24 +37,27 @@ def ouvrir_fichier_pdf(chemin_pdf):
     except Exception as e:
         ui.notify(f"Erreur lors de l'ouverture du PDF : {e}", type="negative")
 
-# --- FONCTION GLOBALE DE CONVERSION (TOTALEMENT SÉCURISÉE) ---
+# --- FONCTION GLOBALE DE CONVERSION ---
 def convertir_devis_en_prestation(devis_id, num_devis, callback_rechargement):
-    conn_tmp = database.get_conn()
+    client_db = database.get_client()
     try:
-        devis = conn_tmp.execute("SELECT * FROM devis WHERE id=?", (devis_id,)).fetchone()
-        items = conn_tmp.execute("SELECT * FROM devis_items WHERE devis_id=?", (devis_id,)).fetchall()
+        res_devis = client_db.table("devis").select("*").eq("id", devis_id).execute()
+        devis = res_devis.data[0] if res_devis.data else None
+        
+        res_items = client_db.table("devis_items").select("*").eq("devis_id", devis_id).execute()
+        items = res_items.data or []
         
         client_id = devis['client_id'] if devis else None
         sites_sec = []
         if client_id:
             try:
-                sites_sec = conn_tmp.execute(
-                    "SELECT id, nom_site, adresse FROM etablissements WHERE client_id=?", (client_id,)
-                ).fetchall()
+                res_sites = client_db.table("etablissements").select("id, nom_site, adresse").eq("client_id", client_id).execute()
+                sites_sec = res_sites.data or []
             except Exception:
                 sites_sec = []
-    finally:
-        conn_tmp.close()
+    except Exception as e:
+        ui.notify(f"Erreur lors de la récupération du devis : {e}", type="negative")
+        return
 
     date_defaut = devis['date_prevue_execution'] if (devis and devis['date_prevue_execution']) else datetime.now().strftime("%Y-%m-%d")
 
@@ -125,68 +128,61 @@ def convertir_devis_en_prestation(devis_id, num_devis, callback_rechargement):
             except Exception:
                 pass
 
-            conn_inner = database.get_conn()
             try:
-                cur_inner = conn_inner.cursor()
-                cur_inner.execute("UPDATE devis SET statut='Accepté', date_prevue_execution=? WHERE id=?", (val_date, devis_id))
+                client_db.table("devis").update({
+                    "statut": "Accepté",
+                    "date_prevue_execution": val_date
+                }).eq("id", devis_id).execute()
+
                 num_interv = database.generer_numero_document("PREST")
 
                 if items:
                     for item in items:
                         quantite_finale = qte_calculee if qte_calculee else item['quantite']
+                        payload = {
+                            "numero_intervention": num_interv,
+                            "client_id": devis['client_id'],
+                            "etablissement_id": val_site_id,
+                            "prestation_id": item['prestation_id'],
+                            "devis_id": devis_id,
+                            "date": val_date,
+                            "heure_debut": val_h_debut,
+                            "heure_fin": val_h_fin,
+                            "quantite": quantite_finale,
+                            "prix_final_ht": item['prix_unitaire_ht'],
+                            "taux_tva": item['taux_tva'],
+                            "statut": "En attente",
+                            "commentaire": f"Générée depuis devis {num_devis}"
+                        }
                         try:
-                            cur_inner.execute("""
-                                INSERT INTO interventions (
-                                    numero_intervention, client_id, etablissement_id, prestation_id, devis_id, 
-                                    date, heure_debut, heure_fin, quantite, prix_final_ht, taux_tva, statut, commentaire
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                            """, (
-                                num_interv, devis['client_id'], val_site_id, item['prestation_id'], devis_id, 
-                                val_date, val_h_debut, val_h_fin, quantite_finale, 
-                                item['prix_unitaire_ht'], item['taux_tva'], f"Générée depuis devis {num_devis}"
-                            ))
+                            client_db.table("interventions").insert(payload).execute()
                         except Exception:
-                            cur_inner.execute("""
-                                INSERT INTO interventions (
-                                    numero_intervention, client_id, prestation_id, devis_id, 
-                                    date, heure_debut, heure_fin, quantite, prix_final_ht, taux_tva, statut, commentaire
-                                )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                            """, (
-                                num_interv, devis['client_id'], item['prestation_id'], devis_id, 
-                                val_date, val_h_debut, val_h_fin, quantite_finale, 
-                                item['prix_unitaire_ht'], item['taux_tva'], f"Générée depuis devis {num_devis}"
-                            ))
+                            # Fallback sans etablissement_id si la colonne n'existe pas
+                            payload.pop("etablissement_id", None)
+                            client_db.table("interventions").insert(payload).execute()
                 else:
+                    payload = {
+                        "numero_intervention": num_interv,
+                        "client_id": devis['client_id'],
+                        "etablissement_id": val_site_id,
+                        "devis_id": devis_id,
+                        "date": val_date,
+                        "heure_debut": val_h_debut,
+                        "heure_fin": val_h_fin,
+                        "quantite": qte_calculee,
+                        "prix_final_ht": devis['total_ht'],
+                        "statut": "En attente",
+                        "commentaire": f"Générée depuis devis {num_devis}"
+                    }
                     try:
-                        cur_inner.execute("""
-                            INSERT INTO interventions (
-                                numero_intervention, client_id, etablissement_id, devis_id, 
-                                date, heure_debut, heure_fin, quantite, prix_final_ht, statut, commentaire
-                            )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                        """, (
-                            num_interv, devis['client_id'], val_site_id, devis_id, 
-                            val_date, val_h_debut, val_h_fin, qte_calculee, 
-                            devis['total_ht'], f"Générée depuis devis {num_devis}"
-                        ))
+                        client_db.table("interventions").insert(payload).execute()
                     except Exception:
-                        cur_inner.execute("""
-                            INSERT INTO interventions (
-                                numero_intervention, client_id, devis_id, 
-                                date, heure_debut, heure_fin, quantite, prix_final_ht, statut, commentaire
-                            )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'En attente', ?)
-                        """, (
-                            num_interv, devis['client_id'], devis_id, 
-                            val_date, val_h_debut, val_h_fin, qte_calculee, 
-                            devis['total_ht'], f"Générée depuis devis {num_devis}"
-                        ))
+                        payload.pop("etablissement_id", None)
+                        client_db.table("interventions").insert(payload).execute()
 
-                conn_inner.commit()
-            finally:
-                conn_inner.close()
+            except Exception as e:
+                ui.notify(f"Erreur lors de la conversion : {e}", type="negative")
+                return
 
             ui.notify(f"Devis {num_devis} ACCEPTÉ ! Prestation {num_interv} planifiée.", type="positive", icon="event_available")
             dialog.close()
@@ -291,21 +287,21 @@ def render_devis():
             filtre_statut = select_statut.value
             filtre_client = select_client.value
 
-            conn = database.get_conn()
+            client_db = database.get_client()
             try:
-                query = """
-                    SELECT d.*, c.nom_societe, c.email as client_email
-                    FROM devis d
-                    JOIN clients c ON d.client_id = c.id
-                    ORDER BY d.id DESC
-                """
-                rows = conn.execute(query).fetchall()
-            finally:
-                conn.close()
+                res = client_db.table("devis").select("*, clients(nom_societe, email)").order("id", desc=True).execute()
+                rows = res.data or []
+            except Exception as e:
+                ui.notify(f"Erreur de chargement des devis : {e}", type="negative")
+                rows = []
 
             devis_list = []
             for r in rows:
                 item = dict(r)
+                client_info = item.get('clients') or {}
+                item['nom_societe'] = client_info.get('nom_societe', 'Inconnu')
+                item['client_email'] = client_info.get('email', '')
+
                 item['date_creation_fr'] = formater_date_fr(item['date_creation'])
                 item['date_validite_fr'] = formater_date_fr(item['date_validite'])
                 item['total_ht_txt'] = f"{(item['total_ht'] or 0.0):.2f} €"
@@ -365,16 +361,13 @@ def render_devis():
             ouvrir_dialogue_envoi_email(d)
 
         def tenter_conversion():
-            print("--- CLIC SUR CONVERTIR CAPTÉ ---")
             d = selection_holder['selected_row']
-            print("Ligne sélectionnée :", d)
             if not d:
                 ui.notify("Veuillez sélectionner un devis.", type="warning")
                 return
             
             devis_id = d.get('id')
             num_dev = d.get('numero_devis')
-            print(f"ID: {devis_id}, Numéro: {num_dev}")
             
             if devis_id:
                 convertir_devis_en_prestation(devis_id, num_dev, charger_donnees)
@@ -391,12 +384,13 @@ def render_devis():
             d = selection_holder['selected_row']
             if not d:
                 return
-            conn = database.get_conn()
+            client_db = database.get_client()
             try:
-                conn.execute("UPDATE devis SET statut='Refusé' WHERE id=?", (d['id'],))
-                conn.commit()
-            finally:
-                conn.close()
+                client_db.table("devis").update({"statut": "Refusé"}).eq("id", d['id']).execute()
+            except Exception as e:
+                ui.notify(f"Erreur : {e}", type="negative")
+                return
+
             ui.notify(f"Devis {d['numero_devis']} marqué comme Refusé.", type="warning")
             charger_donnees()
 
@@ -406,12 +400,13 @@ def render_devis():
                 return
             confirmer_suppression(d['id'], d['numero_devis'])
 
-        # --- DIALOGUE CRÉATION / ÉDITION DEVIS (AGENCEMENT EN 2 COLONNES) ---
+        # --- DIALOGUE CRÉATION / ÉDITION DEVIS ---
         def ouvrir_dialogue_devis(devis_id=None):
             is_edit = devis_id is not None
-            conn = database.get_conn()
+            client_db = database.get_client()
             try:
-                clients_rows = conn.execute("SELECT id, nom_societe, sans_tva FROM clients ORDER BY nom_societe ASC").fetchall()
+                res_clients = client_db.table("clients").select("id, nom_societe, sans_tva").order("nom_societe").execute()
+                clients_rows = res_clients.data or []
                 clients_dict = {c['id']: c['nom_societe'] for c in clients_rows}
                 clients_tva_map = {c['id']: bool(c['sans_tva']) for c in clients_rows}
 
@@ -425,10 +420,13 @@ def render_devis():
                 devis_data = None
                 items_data = []
                 if is_edit:
-                    devis_data = dict(conn.execute("SELECT * FROM devis WHERE id=?", (devis_id,)).fetchone())
-                    items_data = [dict(r) for r in conn.execute("SELECT * FROM devis_items WHERE devis_id=?", (devis_id,)).fetchall()]
-            finally:
-                conn.close()
+                    res_d = client_db.table("devis").select("*").eq("id", devis_id).execute()
+                    devis_data = res_d.data[0] if res_d.data else None
+                    res_items = client_db.table("devis_items").select("*").eq("devis_id", devis_id).execute()
+                    items_data = res_items.data or []
+            except Exception as e:
+                ui.notify(f"Erreur d'initialisation du dialogue : {e}", type="negative")
+                return
 
             statut_actuel = devis_data['statut'] if is_edit else "Brouillon"
 
@@ -531,20 +529,30 @@ def render_devis():
                     client_exonere = clients_tva_map.get(client_id, False)
                     is_exo = entreprise_exoneree or client_exonere
 
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        query = """
-                            SELECT p.id, p.designation, p.unite, p.taux_tva,
-                                   COALESCE(ct.prix_specifique_ht, p.prix_ht) as prix_effectif,
-                                   COALESCE(ct.est_actif, 1) as est_actif
-                            FROM prestations p
-                            LEFT JOIN client_tarifs ct ON p.id = ct.prestation_id AND ct.client_id = ?
-                            WHERE COALESCE(ct.est_actif, 1) = 1
-                            ORDER BY p.designation ASC
-                        """
-                        prestations = conn.execute(query, (client_id,)).fetchall()
-                    finally:
-                        conn.close()
+                        res_p = client_db.table("prestations").select("*").order("designation").execute()
+                        prestations_base = res_p.data or []
+                        
+                        res_t = client_db.table("client_tarifs").select("*").eq("client_id", client_id).execute()
+                        tarifs_specifiques = {t['prestation_id']: t for t in (res_t.data or [])}
+
+                        prestations = []
+                        for p in prestations_base:
+                            t_spec = tarifs_specifiques.get(p['id'])
+                            if t_spec and not t_spec.get('est_actif', True):
+                                continue
+                            prix_eff = t_spec['prix_specifique_ht'] if t_spec and t_spec.get('prix_specifique_ht') is not None else p['prix_ht']
+                            prestations.append({
+                                'id': p['id'],
+                                'designation': p['designation'],
+                                'unite': p.get('unite'),
+                                'taux_tva': p['taux_tva'],
+                                'prix_effectif': prix_eff
+                            })
+                    except Exception as e:
+                        ui.notify(f"Erreur chargement prestations : {e}", type="negative")
+                        return
 
                     if not prestations:
                         ui.notify("Aucune prestation disponible pour ce client.", type="warning")
@@ -646,48 +654,57 @@ def render_devis():
 
                     tot_ttc = tot_ht + tot_tva
 
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        cursor = conn.cursor()
                         if is_edit:
                             num_devis = devis_data['numero_devis']
-                            cursor.execute("""
-                                UPDATE devis SET
-                                    client_id=?, date_creation=?, date_validite=?, date_prevue_execution=?,
-                                    statut=?, total_ht=?, total_tva=?, total_ttc=?, remarque=?
-                                WHERE id=?
-                            """, (
-                                client_select.value, date_crea.value, date_val.value, date_exec.value,
-                                statut_actuel, tot_ht, tot_tva, tot_ttc, remarque_in.value, devis_id
-                            ))
-                            cursor.execute("DELETE FROM devis_items WHERE devis_id=?", (devis_id,))
+                            client_db.table("devis").update({
+                                "client_id": client_select.value,
+                                "date_creation": date_crea.value,
+                                "date_validite": date_val.value,
+                                "date_prevue_execution": date_exec.value,
+                                "statut": statut_actuel,
+                                "total_ht": tot_ht,
+                                "total_tva": tot_tva,
+                                "total_ttc": tot_ttc,
+                                "remarque": remarque_in.value
+                            }).eq("id", devis_id).execute()
+
+                            client_db.table("devis_items").delete().eq("devis_id", devis_id).execute()
                             target_devis_id = devis_id
                         else:
                             num_devis = database.generer_numero_document("DEV")
-                            cursor.execute("""
-                                INSERT INTO devis (
-                                    numero_devis, client_id, date_creation, date_validite, date_prevue_execution,
-                                    statut, total_ht, total_tva, total_ttc, remarque
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (
-                                num_devis, client_select.value, date_crea.value, date_val.value, date_exec.value,
-                                "Brouillon", tot_ht, tot_tva, tot_ttc, remarque_in.value
-                            ))
-                            target_devis_id = cursor.lastrowid
+                            res_ins = client_db.table("devis").insert({
+                                "numero_devis": num_devis,
+                                "client_id": client_select.value,
+                                "date_creation": date_crea.value,
+                                "date_validite": date_val.value,
+                                "date_prevue_execution": date_exec.value,
+                                "statut": "Brouillon",
+                                "total_ht": tot_ht,
+                                "total_tva": tot_tva,
+                                "total_ttc": tot_ttc,
+                                "remarque": remarque_in.value
+                            }).execute()
+                            target_devis_id = res_ins.data[0]['id']
 
+                        items_payload = []
                         for line in lignes_state:
                             taux_tva_sauvegarder = 0.0 if is_exo else float(line['tva'].value or 0.0)
-                            cursor.execute("""
-                                INSERT INTO devis_items (devis_id, prestation_id, quantite, prix_unitaire_ht, taux_tva)
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (
-                                target_devis_id, line['prest'].value, float(line['qte'].value or 0.0),
-                                float(line['pu'].value or 0.0), taux_tva_sauvegarder
-                            ))
+                            items_payload.append({
+                                "devis_id": target_devis_id,
+                                "prestation_id": line['prest'].value,
+                                "quantite": float(line['qte'].value or 0.0),
+                                "prix_unitaire_ht": float(line['pu'].value or 0.0),
+                                "taux_tva": taux_tva_sauvegarder
+                            })
+                        
+                        if items_payload:
+                            client_db.table("devis_items").insert(items_payload).execute()
 
-                        conn.commit()
-                    finally:
-                        conn.close()
+                    except Exception as e:
+                        ui.notify(f"Erreur lors de la sauvegarde : {e}", type="negative")
+                        return
 
                     ui.notify(f"Devis {num_devis} enregistré !", type="positive")
                     dialog.close()
@@ -700,11 +717,13 @@ def render_devis():
             dialog.open()
 
         def ouvrir_dialogue_envoi_email(devis):
-            conn = database.get_conn()
+            client_db = database.get_client()
             try:
-                client = conn.execute("SELECT nom_societe, email FROM clients WHERE id=?", (devis['client_id'],)).fetchone()
-            finally:
-                conn.close()
+                res_c = client_db.table("clients").select("nom_societe, email").eq("id", devis['client_id']).execute()
+                client = res_c.data[0] if res_c.data else None
+            except Exception as e:
+                ui.notify(f"Erreur : {e}", type="negative")
+                return
 
             email_client = client['email'] if client else ""
             if not email_client:
@@ -731,12 +750,12 @@ def render_devis():
                     )
 
                     if succes:
-                        conn_e = database.get_conn()
+                        client_db = database.get_client()
                         try:
-                            conn_e.execute("UPDATE devis SET statut='Envoyé' WHERE id=?", (devis['id'],))
-                            conn_e.commit()
-                        finally:
-                            conn_e.close()
+                            client_db.table("devis").update({"statut": "Envoyé"}).eq("id", devis['id']).execute()
+                        except Exception as e:
+                            ui.notify(f"Erreur mise à jour statut : {e}", type="negative")
+                            return
 
                         ui.notify(f"Devis {devis['numero_devis']} envoyé !", type="positive", icon="send")
                         dialog.close()
@@ -757,12 +776,13 @@ def render_devis():
                 ui.label(f"Voulez-vous supprimer définitivement le devis « {num_devis} » ?").classes("text-slate-600")
 
                 def supprimer():
-                    conn = database.get_conn()
+                    client_db = database.get_client()
                     try:
-                        conn.execute("DELETE FROM devis WHERE id=?", (devis_id,))
-                        conn.commit()
-                    finally:
-                        conn.close()
+                        client_db.table("devis").delete().eq("id", devis_id).execute()
+                    except Exception as e:
+                        ui.notify(f"Erreur lors de la suppression : {e}", type="negative")
+                        return
+
                     dialog.close()
                     ui.notify("Devis supprimé.", type="info")
                     charger_donnees()

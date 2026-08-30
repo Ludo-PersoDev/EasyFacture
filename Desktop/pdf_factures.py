@@ -28,7 +28,7 @@ MOIS_FR = {
 
 
 def format_date_fr(date_str):
-    """Convertit 'AAAA-MM-JJ' en 'JJ/MM/AAAA'[cite: 4]."""
+    """Convertit 'AAAA-MM-JJ' en 'JJ/MM/AAAA'."""
     if not date_str:
         return ""
     try:
@@ -39,7 +39,7 @@ def format_date_fr(date_str):
 
 
 def nettoyer_nom_dossier(nom):
-    """Supprime les caractères spéciaux non autorisés dans les noms de dossiers Windows[cite: 4]."""
+    """Supprime les caractères spéciaux non autorisés dans les noms de dossiers Windows."""
     if not nom:
         return "Client_Inconnu"
     nom_propre = re.sub(r"[\\/*?:\"<>|]", "_", str(nom).strip())
@@ -47,7 +47,7 @@ def nettoyer_nom_dossier(nom):
 
 
 def obtenir_chemin_export_facture(nom_client, numero_facture):
-    """Génère l'arborescence : Export/NomClient/Factures/FAC-2026-XXXX.pdf[cite: 4]."""
+    """Génère l'arborescence : Export/NomClient/Factures/FAC-2026-XXXX.pdf."""
     base_dir = os.getcwd()
     client_folder = nettoyer_nom_dossier(nom_client)
     export_dir = os.path.join(base_dir, "Export", client_folder, "Factures")
@@ -57,7 +57,7 @@ def obtenir_chemin_export_facture(nom_client, numero_facture):
 
 def obtenir_chemin_export_recap(nom_client, numero_facture=None):
     """
-    Garantit et retourne le chemin d'exportation pour le récapitulatif du client[cite: 4].
+    Garantit et retourne le chemin d'exportation pour le récapitulatif du client.
     """
     client_folder = nettoyer_nom_dossier(nom_client)
     dossier_base = os.path.join(os.getcwd(), "Export", client_folder, "Recaps")
@@ -74,24 +74,23 @@ def obtenir_chemin_export_recap(nom_client, numero_facture=None):
 def generer_pdf_facture(facture_id, output_path=None):
     """
     Aiguille vers la facture condensée ou détaillée selon le choix du client en base,
-    et génère automatiquement le récapitulatif si 'recap_interventions' est à 1[cite: 4].
+    et génère automatiquement le récapitulatif si 'recap_interventions' est à 1.
     """
-    conn = database.get_conn()
-    query = """
-        SELECT c.modele_facture, c.recap_interventions, c.nom_societe, f.numero_facture
-        FROM factures f 
-        JOIN clients c ON f.client_id = c.id 
-        WHERE f.id = ?
-    """
-    res = conn.execute(query, (facture_id,)).fetchone()
-    conn.close()
+    supabase = database.get_db()
+    
+    # Récupération de la facture avec les infos du client lié
+    res = supabase.table("factures").select(
+        "numero_facture, client_id, clients(modele_facture, recap_interventions, nom_societe)"
+    ).eq("id", facture_id).execute()
 
-    if not res:
+    if not res.data:
         raise ValueError(f"Facture ID {facture_id} introuvable.")
 
-    res_dict = dict(res)
-    modele = res_dict.get('modele_facture', 'condense')
-    recap_auto = res_dict.get('recap_interventions', 0)
+    facture_row = res.data[0]
+    client_data = facture_row.get("clients") or {}
+    
+    modele = client_data.get('modele_facture', 'condense')
+    recap_auto = client_data.get('recap_interventions', 0)
 
     if modele == 'detaille':
         pdf_path = generer_pdf_facture_detaillee(facture_id, output_path)
@@ -108,35 +107,47 @@ def generer_pdf_facture(facture_id, output_path=None):
 
 
 def generer_pdf_facture_condensee(facture_id, output_path=None):
-    """Génère le document PDF d'une facture condensée par prestation et l'enregistre[cite: 4]."""
-    conn = database.get_conn()
+    """Génère le document PDF d'une facture condensée par prestation et l'enregistre."""
+    supabase = database.get_db()
 
-    query_facture = """
-        SELECT f.*, 
-               c.nom_societe, c.contact, c.adresse AS client_adresse, 
-               c.cp AS client_cp, c.ville AS client_ville, c.siret AS client_siret,
-               c.est_particulier, c.sans_tva
-        FROM factures f
-        JOIN clients c ON f.client_id = c.id
-        WHERE f.id = ?
-    """
-    facture = conn.execute(query_facture, (facture_id,)).fetchone()
-    if not facture:
-        conn.close()
+    # Récupération facture + client associé
+    facture_res = supabase.table("factures").select(
+        "*, clients(nom_societe, contact, adresse, cp, ville, siret, est_particulier, sans_tva)"
+    ).eq("id", facture_id).execute()
+
+    if not facture_res.data:
         raise ValueError(f"Facture ID {facture_id} introuvable.")
 
-    facture_dict = dict(facture)
+    f_data = facture_res.data[0]
+    c_data = f_data.get("clients") or {}
 
-    query_items = """
-        SELECT i.*, p.designation, p.unite 
-        FROM interventions i
-        LEFT JOIN prestations p ON i.prestation_id = p.id
-        WHERE i.facture_id = ?
-        ORDER BY i.date ASC
-    """
-    items = conn.execute(query_items, (facture_id,)).fetchall()
+    facture_dict = {
+        **f_data,
+        "nom_societe": c_data.get("nom_societe"),
+        "contact": c_data.get("contact"),
+        "client_adresse": c_data.get("adresse"),
+        "client_cp": c_data.get("cp"),
+        "client_ville": c_data.get("ville"),
+        "client_siret": c_data.get("siret"),
+        "est_particulier": c_data.get("est_particulier"),
+        "sans_tva": c_data.get("sans_tva")
+    }
+
+    # Récupération des interventions associées triées par date
+    items_res = supabase.table("interventions").select(
+        "*, prestations(designation, unite)"
+    ).eq("facture_id", facture_id).order("date", desc=False).execute()
+
+    items = []
+    for row in items_res.data:
+        prest = row.get("prestations") or {}
+        items.append({
+            **row,
+            "designation": prest.get("designation"),
+            "unite": prest.get("unite")
+        })
+
     params = database.recuperer_parametres()
-    conn.close()
 
     if not output_path:
         output_path = obtenir_chemin_export_facture(
@@ -300,16 +311,15 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
 
     items_groupes = {}
     for it in items:
-        i_dict = dict(it)
-        desig = i_dict.get("designation") or "Prestation réalisée"
-        px_u = i_dict["prix_final_ht"] or 0.0
-        taux_tva = i_dict.get("taux_tva") or 0.0
-        unite = i_dict.get("unite") or "h"
+        desig = it.get("designation") or "Prestation réalisée"
+        px_u = it.get("prix_final_ht") or 0.0
+        taux_tva = it.get("taux_tva") or 0.0
+        unite = it.get("unite") or "h"
         
         key = (desig, px_u, taux_tva, unite)
         if key not in items_groupes:
             items_groupes[key] = 0.0
-        items_groupes[key] += (i_dict["quantite"] or 1.0)
+        items_groupes[key] += (it.get("quantite") or 1.0)
 
     table_data = [
         [
@@ -351,9 +361,9 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
     elements.append(prest_table)
     elements.append(Spacer(1, 0.6 * cm))
 
-    tot_ht = facture_dict["total_ht"] or 0.0
-    tot_tva = facture_dict["total_tva"] or 0.0
-    tot_ttc = facture_dict["total_ttc"] or 0.0
+    tot_ht = facture_dict.get("total_ht") or 0.0
+    tot_tva = facture_dict.get("total_tva") or 0.0
+    tot_ttc = facture_dict.get("total_ttc") or 0.0
 
     reglement_text = ""
     if params.get("iban"):
@@ -404,45 +414,56 @@ def generer_pdf_facture_condensee(facture_id, output_path=None):
 
     doc.build(elements)
 
-    conn = database.get_conn()
-    conn.execute("UPDATE factures SET pdf_path = ? WHERE id = ?", (output_path, facture_id))
-    conn.commit()
-    conn.close()
+    # Mise à jour du chemin du PDF dans Supabase
+    supabase.table("factures").update({"pdf_path": output_path}).eq("id", facture_id).execute()
 
     return os.path.abspath(output_path)
 
 
 def generer_pdf_facture_detaillee(facture_id, output_path=None):
-    """Génère le document PDF d'une facture détaillée (ligne par ligne par intervention) et l'enregistre[cite: 4]."""
-    conn = database.get_conn()
+    """Génère le document PDF d'une facture détaillée (ligne par ligne par intervention) et l'enregistre."""
+    supabase = database.get_db()
 
-    query_facture = """
-        SELECT f.*, 
-               c.nom_societe, c.contact, c.adresse AS client_adresse, 
-               c.cp AS client_cp, c.ville AS client_ville, c.siret AS client_siret,
-               c.est_particulier, c.sans_tva
-        FROM factures f
-        JOIN clients c ON f.client_id = c.id
-        WHERE f.id = ?
-    """
-    facture = conn.execute(query_facture, (facture_id,)).fetchone()
-    if not facture:
-        conn.close()
+    # Récupération facture + client associé
+    facture_res = supabase.table("factures").select(
+        "*, clients(nom_societe, contact, adresse, cp, ville, siret, est_particulier, sans_tva)"
+    ).eq("id", facture_id).execute()
+
+    if not facture_res.data:
         raise ValueError(f"Facture ID {facture_id} introuvable.")
 
-    facture_dict = dict(facture)
+    f_data = facture_res.data[0]
+    c_data = f_data.get("clients") or {}
 
-    query_items = """
-        SELECT i.*, p.designation, p.unite, e.nom_site AS etablissement_nom
-        FROM interventions i
-        LEFT JOIN prestations p ON i.prestation_id = p.id
-        LEFT JOIN etablissements e ON i.etablissement_id = e.id
-        WHERE i.facture_id = ?
-        ORDER BY i.date ASC
-    """
-    items = conn.execute(query_items, (facture_id,)).fetchall()
+    facture_dict = {
+        **f_data,
+        "nom_societe": c_data.get("nom_societe"),
+        "contact": c_data.get("contact"),
+        "client_adresse": c_data.get("adresse"),
+        "client_cp": c_data.get("cp"),
+        "client_ville": c_data.get("ville"),
+        "client_siret": c_data.get("siret"),
+        "est_particulier": c_data.get("est_particulier"),
+        "sans_tva": c_data.get("sans_tva")
+    }
+
+    # Récupération des interventions avec prestations et établissements
+    items_res = supabase.table("interventions").select(
+        "*, prestations(designation, unite), etablissements(nom_site)"
+    ).eq("facture_id", facture_id).order("date", desc=False).execute()
+
+    items = []
+    for row in items_res.data:
+        prest = row.get("prestations") or {}
+        etab = row.get("etablissements") or {}
+        items.append({
+            **row,
+            "designation": prest.get("designation"),
+            "unite": prest.get("unite"),
+            "etablissement_nom": etab.get("nom_site")
+        })
+
     params = database.recuperer_parametres()
-    conn.close()
 
     if not output_path:
         output_path = obtenir_chemin_export_facture(
@@ -615,23 +636,22 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
     ]
 
     for it in items:
-        i_dict = dict(it)
-        date_interv = format_date_fr(i_dict.get("date"))
-        site_nom = i_dict.get("etablissement_nom")
-        desig = i_dict.get("designation") or "Prestation réalisée"
+        date_interv = format_date_fr(it.get("date"))
+        site_nom = it.get("etablissement_nom")
+        desig = it.get("designation") or "Prestation réalisée"
         
         libelle_ligne = f"<b>{date_interv}</b>"
         if site_nom:
             libelle_ligne += f" - <i>{site_nom}</i>"
         libelle_ligne += f"<br/>{desig}"
         
-        if i_dict.get("commentaire"):
-            libelle_ligne += f"<br/><font color='#64748b' size='7'>({i_dict['commentaire']})</font>"
+        if it.get("commentaire"):
+            libelle_ligne += f"<br/><font color='#64748b' size='7'>({it['commentaire']})</font>"
 
-        qte = i_dict.get("quantite") or 1.0
-        px_u = i_dict.get("prix_final_ht") or 0.0
-        taux_tva = i_dict.get("taux_tva") or 0.0
-        unite = i_dict.get("unite") or "h"
+        qte = it.get("quantite") or 1.0
+        px_u = it.get("prix_final_ht") or 0.0
+        taux_tva = it.get("taux_tva") or 0.0
+        unite = it.get("unite") or "h"
         tot_ligne_ht = qte * px_u
 
         table_data.append(
@@ -662,9 +682,9 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
     elements.append(prest_table)
     elements.append(Spacer(1, 0.6 * cm))
 
-    tot_ht = facture_dict["total_ht"] or 0.0
-    tot_tva = facture_dict["total_tva"] or 0.0
-    tot_ttc = facture_dict["total_ttc"] or 0.0
+    tot_ht = facture_dict.get("total_ht") or 0.0
+    tot_tva = facture_dict.get("total_tva") or 0.0
+    tot_ttc = facture_dict.get("total_ttc") or 0.0
 
     reglement_text = ""
     if params.get("iban"):
@@ -715,44 +735,46 @@ def generer_pdf_facture_detaillee(facture_id, output_path=None):
 
     doc.build(elements)
 
-    conn = database.get_conn()
-    conn.execute("UPDATE factures SET pdf_path = ? WHERE id = ?", (output_path, facture_id))
-    conn.commit()
-    conn.close()
+    # Mise à jour du chemin du PDF dans Supabase
+    supabase.table("factures").update({"pdf_path": output_path}).eq("id", facture_id).execute()
 
     return os.path.abspath(output_path)
 
 
 def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Intervention(s)"):
     """Génère le PDF du récapitulatif détaillé des interventions (avec totaux et nombre de prestations)."""
-    conn = database.get_conn()
+    supabase = database.get_db()
 
-    query_facture = """
-        SELECT f.*, c.nom_societe 
-        FROM factures f
-        JOIN clients c ON f.client_id = c.id
-        WHERE f.id = ?
-    """
-    facture = conn.execute(query_facture, (facture_id,)).fetchone()
-    conn.close()
-    if not facture:
+    # Récupération facture + client
+    facture_res = supabase.table("factures").select(
+        "*, clients(nom_societe)"
+    ).eq("id", facture_id).execute()
+
+    if not facture_res.data:
         raise ValueError(f"Facture ID {facture_id} introuvable.")
-    facture_dict = dict(facture)
 
-    conn = database.get_conn()
-    query_items = """
-        SELECT 
-            i.*, 
-            p.designation AS prest_nom,
-            e.nom_site AS etablissement_nom
-        FROM interventions i
-        LEFT JOIN prestations p ON i.prestation_id = p.id
-        LEFT JOIN etablissements e ON i.etablissement_id = e.id
-        WHERE i.facture_id = ?
-        ORDER BY i.date ASC
-    """
-    interventions = conn.execute(query_items, (facture_id,)).fetchall()
-    conn.close()
+    f_data = facture_res.data[0]
+    c_data = f_data.get("clients") or {}
+    
+    facture_dict = {
+        **f_data,
+        "nom_societe": c_data.get("nom_societe")
+    }
+
+    # Récupération des interventions associées avec jointures prestations et établissements
+    items_res = supabase.table("interventions").select(
+        "*, prestations(designation), etablissements(nom_site)"
+    ).eq("facture_id", facture_id).order("date", desc=False).execute()
+
+    interventions = []
+    for row in items_res.data:
+        prest = row.get("prestations") or {}
+        etab = row.get("etablissements") or {}
+        interventions.append({
+            **row,
+            "prest_nom": prest.get("designation"),
+            "etablissement_nom": etab.get("nom_site")
+        })
 
     if not output_path:
         output_path = obtenir_chemin_export_recap(
@@ -800,7 +822,7 @@ def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Interventi
     else:
         etabs_set = set()
         for it in interventions:
-            etab = it["etablissement_nom"] or "Autre"
+            etab = it.get("etablissement_nom") or "Autre"
             etabs_set.add(etab)
         etabs_list = sorted(list(etabs_set))
 
@@ -810,7 +832,6 @@ def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Interventi
             debut_sem = dt - timedelta(days=dt.weekday())
             fin_sem = debut_sem + timedelta(days=6)
             
-            # Utilisation du dictionnaire français pour les mois
             m_debut = MOIS_FR[debut_sem.month]
             m_fin = MOIS_FR[fin_sem.month]
             
@@ -844,15 +865,15 @@ def generer_pdf_recap_facture(facture_id, output_path=None, intitule="Interventi
             nombre_semaine = 0
 
             for etab in etabs_list:
-                matches = [x for x in items_sem if (x["etablissement_nom"] or "Autre") == etab]
+                matches = [x for x in items_sem if (x.get("etablissement_nom") or "Autre") == etab]
                 cell_texts = []
                 for m in matches:
-                    d_fr = format_date_fr(m["date"])
-                    montant_ligne = (m["prix_final_ht"] or 0.0) * (m["quantite"] or 1.0)
+                    d_fr = format_date_fr(m.get("date"))
+                    montant_ligne = (m.get("prix_final_ht") or 0.0) * (m.get("quantite") or 1.0)
                     total_semaine += montant_ligne
                     nombre_semaine += 1
                     
-                    desc_courte = m["prest_nom"] or f"Interv. {m['id']}"
+                    desc_courte = m.get("prest_nom") or f"Interv. {m.get('id')}"
                     if m.get('commentaire'):
                         desc_courte += f"<br/><font color='#64748b' size='7'>({m['commentaire']})</font>"
                         
