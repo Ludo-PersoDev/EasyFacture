@@ -1,0 +1,29 @@
+#Archivage Pré-GitHub
+Archivage/
+
+# Dossiers générés par l'application
+export/
+auto_backups/
+*.log
+erreur_fatale.txt
+
+# JSON pour sécu
+credentials.json
+token.json
+config.json
+
+# Dossiers générés par PyInstaller
+build/
+dist/
+*.spec.bak
+
+# Base de données SQLite locale (optionnel, selon si tu veux garder une DB vide)
+FactureX.db
+
+# Fichiers temporaires Python et VS Code / PyCharm
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.venv/
+env/
