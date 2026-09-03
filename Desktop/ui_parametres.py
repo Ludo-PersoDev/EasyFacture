@@ -151,6 +151,32 @@ def render_parametres():
                     smtp_password_input = ui.input("Mot de passe d'application", value=params.get("smtp_password", ""), password=True, password_toggle_button=True).classes("flex-1")
 
                 def enregistrer():
+                    # --- SUPABASE : Préparation des données ---
+                    data_payload = {
+                        "nom_entreprise": nom_input.value,
+                        "adresse": adresse_input.value,
+                        "code_postal": cp_input.value,
+                        "ville": ville_input.value,
+                        "telephone": tel_input.value,
+                        "email": email_input.value,
+                        "siret": siret_input.value,
+                        "rcs": rcs_input.value,
+                        "ape": ape_input.value,
+                        "tva_exoneree": int(tva_exo_checkbox.value),
+                        "num_tva": num_tva_input.value,
+                        "mention_tva_exoneree": mention_exo_input.value,
+                        "nom_banque": banque_input.value,
+                        "iban": iban_input.value,
+                        "bic": bic_input.value,
+                        "logo_path": logo_path_holder["path"],
+                        "smtp_server": smtp_server_input.value,
+                        "smtp_port": int(smtp_port_input.value or 587),
+                        "smtp_user": smtp_user_input.value,
+                        "smtp_password": smtp_password_input.value
+                    }
+
+                    supabase = database.get_client()
+                    supabase.table("parametres").insert(data_payload).execute()
                     conn = database.get_conn()
                     cursor = conn.cursor()
                     cursor.execute("""

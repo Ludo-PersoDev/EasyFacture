@@ -2,7 +2,7 @@
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
-#define MyAppVersion "2.0.4"
+#define MyAppVersion "2.0.5"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 
@@ -19,7 +19,7 @@ Compression=lzma
 SolidCompression=yes
 OutputDir=userdocs:InnoSetup Output
 OutputBaseFilename=Setup_EasyFacture_v{#MyAppVersion}
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
@@ -42,13 +42,21 @@ Source: "credentials.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourced
 ; Fichier credentials optionnel pour Supabase
 Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
+; Installateur Python embarqué (copié temporairement puis supprimé)
+Source: "installer\python-3.14.7-amd64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"
 Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"; Tasks: desktopicon
 
 [Run]
-; Installation automatique de toutes les dépendances Python requises (v1.9.2)
+; 1. Installation silencieuse de Python (pour tous les utilisateurs, ajout au PATH, avec PIP)
+Filename: "{tmp}\python-3.14.7-amd64.exe"; Parameters: "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1"; StatusMsg: "Installation de l'environnement Python en cours..."; Flags: waituntilterminated
+
+; 2. Mise à jour de pip et installation des dépendances requises
 Filename: "python"; Parameters: "-m pip install --upgrade pip"; Flags: runminimized waituntilterminated
 Filename: "python"; Parameters: "-m pip install --user nicegui reportlab google-auth google-auth-oauthlib google-api-python-client pywebview orjson requests supabase"; Flags: runminimized waituntilterminated
+
+; 3. Lancement de l'application à la fin de l'installation
 Filename: "pythonw.exe"; Parameters: "{app}\{#MyAppMainScript}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
