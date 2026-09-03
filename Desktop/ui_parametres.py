@@ -177,14 +177,6 @@ def render_parametres():
 
                     supabase = database.get_client()
                     supabase.table("parametres").insert(data_payload).execute()
-                    conn = database.get_conn()
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE parametres SET nom_entreprise=?, adresse=?, code_postal=?, ville=?, telephone=?, email=?, siret=?, rcs=?, ape=?, tva_exoneree=?, num_tva=?, mention_tva_exoneree=?, nom_banque=?, iban=?, bic=?, logo_path=?, smtp_server=?, smtp_port=?, smtp_user=?, smtp_password=?
-                        WHERE id = 1
-                    """, (nom_input.value, adresse_input.value, cp_input.value, ville_input.value, tel_input.value, email_input.value, siret_input.value, rcs_input.value, ape_input.value, int(tva_exo_checkbox.value), num_tva_input.value, mention_exo_input.value, banque_input.value, iban_input.value, bic_input.value, logo_path_holder["path"], smtp_server_input.value, int(smtp_port_input.value or 587), smtp_user_input.value, smtp_password_input.value))
-                    conn.commit()
-                    conn.close()
                     ui.notify("Paramètres sauvegardés !", type="positive")
 
                 ui.button("Enregistrer les modifications", icon="save", on_click=enregistrer).props("color=primary size=lg").classes("w-full")
