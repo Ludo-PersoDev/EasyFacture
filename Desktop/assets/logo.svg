@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E40AF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Fond Arrondi -->
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#grad1)" />
+  <!-- Feuille Facture -->
+  <path d="M160 120 h140 l80 80 v192 a24 24 0 0 1 -24 24 h-196 a24 24 0 0 1 -24 -24 v-248 a24 24 0 0 1 24 -24 Z" fill="#FFFFFF" opacity="0.95"/>
+  <path d="M300 120 v80 h80" fill="#E2E8F0"/>
+  <!-- Lignes du document -->
+  <line x1="200" y1="230" x2="310" y2="230" stroke="#94A3B8" stroke-width="16" stroke-linecap="round"/>
+  <line x1="200" y1="270" x2="270" y2="270" stroke="#94A3B8" stroke-width="16" stroke-linecap="round"/>
+  <!-- Éclair "Easy" / Checkmark -->
+  <circle cx="340" cy="340" r="72" fill="url(#grad2)" />
+  <path d="M305 340 l25 25 l50 -50" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
