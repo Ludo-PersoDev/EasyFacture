@@ -56,12 +56,12 @@ onMounted(fetchData)
     <div v-else class="space-y-3">
       <div v-for="item in items" :key="item.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div v-if="currentSubTab === 'clients'">
-          <h3 class="text-xs font-bold text-slate-900">{{ item.nom || item.entreprise || 'Client sans nom' }}</h3>
+          <h3 class="text-xs font-bold text-slate-900">{{ item.nom_societe || 'Client sans nom' }}</h3>
           <p class="text-xs text-slate-500 mt-0.5">{{ item.email || 'Pas d’email' }} • {{ item.telephone || 'Pas de téléphone' }}</p>
         </div>
         <div v-else>
-          <h3 class="text-xs font-bold text-slate-900">{{ item.titre || item.nom || 'Prestation' }}</h3>
-          <p class="text-xs text-slate-500 mt-0.5">{{ item.description || 'Aucune description' }}</p>
+          <h3 class="text-xs font-bold text-slate-900">{{ item.designation || item.nom || 'Prestation' }}</h3>
+          <p class="text-xs text-slate-500 mt-0.5">{{ item.unite || 'Aucune description' }}</p>
           <div class="text-xs font-semibold text-blue-600 mt-2">{{ item.prix_ht || item.tarif || 0 }} € HT</div>
         </div>
       </div>
