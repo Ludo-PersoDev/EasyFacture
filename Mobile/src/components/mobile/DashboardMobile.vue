@@ -16,7 +16,7 @@ const fetchDashboardData = async () => {
     // Exemple de requête sur les factures pour alimenter les chiffres clés du mois
     const { data: factures, error } = await supabase
       .from('factures')
-      .select('montant_ttc, statut, facturx_statut')
+      .select('total_ttc, statut, facturx_statut')
       .eq('user_id', user.id)
 
     if (error) throw error
