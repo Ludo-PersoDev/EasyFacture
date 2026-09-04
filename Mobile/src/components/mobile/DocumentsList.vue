@@ -29,11 +29,11 @@ const fetchDocuments = async () => {
 }
 
 const viewPdf = async (doc) => {
-  if (!doc.pdf_path) {
+  if (!doc.pdf_url) {
     alert('Aucun PDF disponible pour ce document.')
     return
   }
-  const { data } = supabase.storage.from('documents').getPublicUrl(doc.pdf_path)
+  const { data } = supabase.storage.from('documents').getPublicUrl(doc.pdf_url)
   if (data?.publicUrl) {
     window.open(data.publicUrl, '_blank')
   }
