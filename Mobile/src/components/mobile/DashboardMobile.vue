@@ -62,6 +62,13 @@ onMounted(() => {
           {{ loading ? '...' : totalEncaisse.toFixed(2) }} €
         </div>
       </div>
+	  
+	  <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Non réglé</span>
+        <div class="text-xl font-extrabold text-emerald-600 mt-1">
+          {{ loading ? '...' : totalImpaye.toFixed(2) }} €
+        </div>
+      </div>
     </div>
 
     <!-- Widget Statut Factur-X (Lecture seule terrain) -->
