@@ -17,7 +17,7 @@ const fetchDocuments = async () => {
       .from(table)
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('date_creation', { ascending: false })
 
     if (error) throw error
     documents.value = data || []
