@@ -69,7 +69,7 @@ onMounted(fetchDocuments)
       <div v-for="doc in documents" :key="doc.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
         <div class="flex justify-between items-start">
           <div>
-            <span class="text-xs font-bold text-slate-900">{{ doc.numero_{activeTab} || 'Brouillon' }}</span>
+            <span class="text-xs font-bold text-slate-900">{{ doc.numero_facture || doc.numero_devis || 'Brouillon' }}</span>
             <p class="text-xs text-slate-500">{{ doc.client_id || 'Client inconnu' }}</p>
           </div>
           <span :class="doc.statut === 'Payée' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'" class="text-[10px] px-2 py-0.5 rounded-full border font-medium">
