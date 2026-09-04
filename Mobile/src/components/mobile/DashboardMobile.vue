@@ -48,7 +48,7 @@ onMounted(() => {
     </div>
 
     <!-- Indicateurs Clés (Chiffres et infos clés) -->
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid grid-cols-3 gap-3">
       <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">CA Total / En cours</span>
         <div class="text-xl font-extrabold text-slate-900 mt-1">
