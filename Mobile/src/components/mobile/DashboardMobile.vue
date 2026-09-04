@@ -24,6 +24,7 @@ const fetchDashboardData = async () => {
     if (factures) {
       totalCaMois.value = factures.reduce((acc, f) => acc + (f.total_ttc || 0), 0)
       totalEncaisse.value = factures.filter(f => f.statut === 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0)
+	  totalImpaye.value = factures.filter(f => f.statut !== 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0)
       facturesARecouvrir.value = factures.filter(f => f.statut !== 'Payée').length
     }
   } catch (err) {
@@ -59,6 +60,13 @@ onMounted(() => {
         <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Encaissé</span>
         <div class="text-xl font-extrabold text-emerald-600 mt-1">
           {{ loading ? '...' : totalEncaisse.toFixed(2) }} €
+        </div>
+      </div>
+	  
+	  <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Non réglé</span>
+        <div class="text-xl font-extrabold text-emerald-600 mt-1">
+          {{ loading ? '...' : totalImpaye.toFixed(2) }} €
         </div>
       </div>
     </div>
