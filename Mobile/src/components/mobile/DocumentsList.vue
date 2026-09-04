@@ -78,7 +78,7 @@ onMounted(fetchDocuments)
         </div>
 
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
-          <span class="text-sm font-extrabold text-slate-900">{{ doc.montant_ttc || 0 }} €</span>
+          <span class="text-sm font-extrabold text-slate-900">{{ doc.total_ttc || 0 }} €</span>
           <button @click="viewPdf(doc)" class="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">
             <span class="material-icons text-sm">visibility</span> Voir PDF
           </button>
