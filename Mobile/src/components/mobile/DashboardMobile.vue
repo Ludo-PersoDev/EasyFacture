@@ -22,8 +22,8 @@ const fetchDashboardData = async () => {
     if (error) throw error
 
     if (factures) {
-      totalCaMois.value = factures.reduce((acc, f) => acc + (f.montant_ttc || 0), 0)
-      totalEncaisse.value = factures.filter(f => f.statut === 'Payée').reduce((acc, f) => acc + (f.montant_ttc || 0), 0)
+      totalCaMois.value = factures.reduce((acc, f) => acc + (f.total_ttc || 0), 0)
+      totalEncaisse.value = factures.filter(f => f.statut === 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0)
       facturesARecouvrir.value = factures.filter(f => f.statut !== 'Payée').length
     }
   } catch (err) {
