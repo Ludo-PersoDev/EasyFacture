@@ -55,11 +55,11 @@ onMounted(() => {
           {{ loading ? '...' : totalCaMois.toFixed(2) }} €
         </div>
       </div>
-	  
-	  <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Impayé</span>
+
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Encaissé</span>
         <div class="text-xl font-extrabold text-emerald-600 mt-1">
-          {{ loading ? '...' : totalImpaye.toFixed(2) }} €
+          {{ loading ? '...' : totalEncaisse.toFixed(2) }} €
         </div>
       </div>
     </div>
