@@ -187,16 +187,19 @@ def verifier_et_installer_maj_avec_ui(script_dir):
             headers={'User-Agent': 'EasyFacture-Updater'}
         )
         
-        # urlopen va suivre la redirection HTTP vers le tag de la dernière version (ex: .../tag/v2.0.3)
+        # urlopen va suivre la redirection HTTP vers le tag de la dernière version (ex: .../tag/V2.0.5)
         with urllib.request.urlopen(req, timeout=5) as response:
             final_url = response.url
-            latest_tag = final_url.split("/")[-1].strip().lstrip('v')
+            # Correction ici : on retire 'v' ET 'V'
+            latest_tag = final_url.split("/")[-1].strip().lstrip('vV')
             
             print(f"Version distante (Web) : {latest_tag} | Version locale : {CURRENT_VERSION}")
             
             if latest_tag:
                 def parse_version(v):
-                    return [int(p) for p in v.split('.')]
+                    # On nettoie également la version au cas où CURRENT_VERSION contiendrait un préfixe
+                    v_clean = str(v).strip().lstrip('vV')
+                    return [int(p) for p in v_clean.split('.')]
                 
                 if parse_version(latest_tag) > parse_version(CURRENT_VERSION):
                     print("Mise à jour détectée, lancement...")

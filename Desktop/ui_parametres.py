@@ -151,8 +151,17 @@ def render_parametres():
                     smtp_password_input = ui.input("Mot de passe d'application", value=params.get("smtp_password", ""), password=True, password_toggle_button=True).classes("flex-1")
 
                 def enregistrer():
+                    # Récupération de l'user_id (similaire à ce que tu fais pour le logo)
+                    try:
+                        supabase_client = database.get_client()
+                        user_response = supabase_client.auth.get_user()
+                        user_id = user_response.user.id if user_response and user_response.user else None
+                    except Exception:
+                        user_id = None
+
                     # --- SUPABASE : Préparation des données ---
                     data_payload = {
+                        "user_id": user_id,  # Indispensable pour l'upsert
                         "nom_entreprise": nom_input.value,
                         "adresse": adresse_input.value,
                         "code_postal": cp_input.value,
@@ -176,7 +185,8 @@ def render_parametres():
                     }
 
                     supabase = database.get_client()
-                    supabase.table("parametres").insert(data_payload).execute()
+                    # Remplacement de .insert() par .upsert()
+                    supabase.table("parametres").upsert(data_payload, on_conflict="user_id").execute()
                     ui.notify("Paramètres sauvegardés !", type="positive")
 
                 ui.button("Enregistrer les modifications", icon="save", on_click=enregistrer).props("color=primary size=lg").classes("w-full")

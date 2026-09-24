@@ -568,12 +568,21 @@ def render_interventions():
                     if is_edition
                     else datetime.now().strftime("%Y-%m-%d")
                 )
+                # Définition de la locale française avec le lundi en premier (firstDayOfWeek: 1)
+                french_locale = {
+                    "days": "Dimanche_Lundi_Mardi_Mercredi_Jeudi_Vendredi_Samedi".split("_"),
+                    "daysShort": "Dim_Lun_Mar_Mer_Jeu_Ven_Sam".split("_"),
+                    "months": "Janvier_Février_Mars_Avril_Mai_Juin_Juillet_Août_Septembre_Octobre_Novembre_Décembre".split("_"),
+                    "monthsShort": "Janv_Févr_Mars_Avr_Mai_Juin_Juil_Août_Sept_Oct_Nov_Déc".split("_"),
+                    "firstDayOfWeek": 1
+                }
+
                 date_input = ui.input(
                     "Date d'exécution", value=val_date_init
                 ).props("dense outlined").classes("w-full")
                 with date_input:
                     with ui.menu() as menu_date:
-                        ui.date().bind_value(date_input)
+                        ui.date().bind_value(date_input).props(f':locale="{french_locale}"')
                     with date_input.add_slot("append"):
                         ui.icon("event").classes("cursor-pointer").on(
                             "click", menu_date.open

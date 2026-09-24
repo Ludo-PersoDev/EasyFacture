@@ -76,7 +76,7 @@ def convertir_devis_en_prestation(devis_id, num_devis, callback_rechargement):
         date_exec_input = ui.input("Date d'exécution", value=date_defaut).props("dense outlined").classes("w-full")
         with date_exec_input:
             with ui.menu() as menu_date:
-                ui.date().bind_value(date_exec_input)
+                ui.date().props('first-day-of-week="1"').bind_value(date_exec_input)
             with date_exec_input.add_slot('append'):
                 ui.icon('event').classes('cursor-pointer').on('click', menu_date.open)
 
@@ -466,7 +466,7 @@ def render_devis():
                             date_exec = ui.input("Exécution prévue", value=date_exec_val).props("dense outlined").classes("flex-1")
                             with date_exec:
                                 with ui.menu() as menu_cal:
-                                    ui.date().bind_value(date_exec)
+                                    ui.date().props('first-day-of-week="1"').bind_value(date_exec)
                                 with date_exec.add_slot('append'):
                                     ui.icon('event').classes('cursor-pointer').on('click', menu_cal.open)
 
