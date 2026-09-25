@@ -5,6 +5,7 @@ import { supabase } from '../../supabase'
 const factures = ref([])
 const interventions = ref([])
 const loading = ref(true)
+const userName = ref('')
 
 // Filtres temporels (Année en cours par défaut, mois par défaut "all")
 const currentYear = new Date().getFullYear().toString()
@@ -63,6 +64,9 @@ const fetchDashboardData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+    // Récupération du prénom depuis les métadonnées de l'utilisateur Supabase
+    userName.value = user.user_metadata?.prenom || user.user_metadata?.full_name || 'Utilisateur'
+
     // 1. Récupération des factures
     const { data: factData, error: factError } = await supabase
       .from('factures')
@@ -98,7 +102,6 @@ const correspondAuxFiltres = (dateString) => {
 
   // Si une semaine spécifique est sélectionnée
   if (selectedWeek.value) {
-    // Normalisation des heures pour comparer proprement les dates (ignorer l'heure)
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
     const debut = new Date(selectedWeek.value.debut.getFullYear(), selectedWeek.value.debut.getMonth(), selectedWeek.value.debut.getDate())
     const fin = new Date(selectedWeek.value.fin.getFullYear(), selectedWeek.value.fin.getMonth(), selectedWeek.value.fin.getDate())
@@ -159,9 +162,9 @@ onMounted(() => {
 
 <template>
   <div class="space-y-4">
-    <!-- En-tête de bienvenue -->
+    <!-- En-tête de bienvenue dynamique -->
     <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-md">
-      <h1 class="text-base font-bold">Bonjour Ludovic 👋</h1>
+      <h1 class="text-base font-bold">Bonjour {{ userName }} 👋</h1>
       <p class="text-[11px] text-blue-100 mt-0.5">Pilotage de votre activité sur le terrain.</p>
     </div>
 
