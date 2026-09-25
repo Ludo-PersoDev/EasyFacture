@@ -41,47 +41,40 @@ const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // 1. Récupération des interventions
+    // 1. Récupération des interventions avec jointures
     const { data: interData, error: interError } = await supabase
       .from('interventions')
-      .select('*')
-      .eq('user_id', user.id)
+      .select('*, clients(nom_societe), prestations(designation), etablissements(nom_site)')
       .order('date', { ascending: false })
 
     if (interError) throw interError
 
     // 2. Récupération des clients
-    let clientsData = []
-    try {
-      const res = await supabase.from('clients').select('*')
-      if (res.data) clientsData = res.data
-    } catch (e) {
-      console.warn("Table clients non accessible", e)
-    }
-    clients.value = clientsData
-
-    // 3. Récupération du catalogue de base
-    try {
-      const resCat = await supabase.from('catalogue_prestations').select('*')
-      if (resCat.data) cataloguePrestations.value = resCat.data
-    } catch (e) {
-      try {
-        const resCatAlt = await supabase.from('catalogue').select('*')
-        if (resCatAlt.data) cataloguePrestations.value = resCatAlt.data
-      } catch (err) {
-        console.warn("Catalogue non trouvé", err)
-      }
-    }
+    const { data: clientsData } = await supabase.from('clients').select('*')
+    clients.value = clientsData || []
 
     const clientsMap = {}
-    clientsData.forEach(c => {
+    ;(clientsData || []).forEach(c => {
       clientsMap[c.id] = c.nom_societe || `${c.prenom || ''} ${c.nom || ''}`.trim()
     })
 
-    interventions.value = (interData || []).map(item => ({
-      ...item,
-      client_nom: clientsMap[item.client_id] || 'Client non spécifié'
-    }))
+    interventions.value = (interData || []).map(item => {
+      const clientRel = item.clients
+      const clientNom = clientRel ? (clientRel.nom_societe || clientRel[0]?.nom_societe) : null
+
+      const prestRel = item.prestations
+      const prestNom = prestRel ? (prestRel.designation || prestRel[0]?.designation) : null
+
+      const etabRel = item.etablissements
+      const etabNom = etabRel ? (etabRel.nom_site || etabRel[0]?.nom_site) : null
+
+      return {
+        ...item,
+        client_nom: clientNom || clientsMap[item.client_id] || 'Client non spécifié',
+        titre: prestNom || item.titre || 'Prestation',
+        site_txt: etabNom || '-'
+      }
+    })
 
   } catch (err) {
     console.error('Erreur chargement global:', err)
@@ -90,29 +83,69 @@ const fetchData = async () => {
   }
 }
 
-// Chargement synchrone des sites et adaptation des tarifs selon le client sélectionné
+// Chargement des établissements et des prestations (avec tarifs spécifiques) du client
 const handleClientChange = async () => {
   sitesSecondaires.value = []
   siteId.value = ''
+  cataloguePrestations.value = []
+  selectedCatalogueId.value = ''
+  tarif.value = ''
+
   if (!selectedClientId.value) return
 
   try {
-    const { data: sitesData } = await supabase
-      .from('clients_sites')
+    // 1. Récupération des établissements (etablissements)
+    const { data: etabs } = await supabase
+      .from('etablissements')
       .select('*')
       .eq('client_id', selectedClientId.value)
     
-    if (sitesData) sitesSecondaires.value = sitesData
+    if (etabs) sitesSecondaires.value = etabs
+
+    // 2. Récupération des tarifs spécifiques ou du catalogue général (prestations)
+    const { data: tarifsSpec } = await supabase
+      .from('client_tarifs')
+      .select('prestation_id, prix_specifique_ht, prestations(id, designation, prix_ht)')
+      .eq('client_id', selectedClientId.value)
+      .eq('est_actif', true)
+
+    let options = []
+    if (tarifsSpec && tarifsSpec.length > 0) {
+      options = tarifsSpec.map(t => {
+        const pInfo = t.prestations || {}
+        const px = t.prix_specifique_ht !== null ? t.prix_specifique_ht : (pInfo.prix_ht || 0.0)
+        return {
+          id: t.prestation_id,
+          designation: `${pInfo.designation || 'Prestation'} (${px.toFixed(2)} €/h - Tarif spécifique)`,
+          prix: px
+        }
+      })
+    } else {
+      const { data: cat } = await supabase.from('prestations').select('*').order('designation')
+      if (cat) {
+        options = cat.map(p => ({
+          id: p.id,
+          designation: `${p.designation} (${(p.prix_ht || 0).toFixed(2)} €/h)`,
+          prix: p.prix_ht || 0
+        }))
+      }
+    }
+
+    cataloguePrestations.value = options
+    if (options.length > 0) {
+      selectedCatalogueId.value = options[0].id
+      tarif.value = options[0].prix
+    }
   } catch (e) {
-    console.warn("Pas de sites secondaires", e)
+    console.warn("Erreur lors du chargement des données dépendantes du client", e)
   }
 }
 
-// Quand on choisit une prestation dans le catalogue
+// Mise à jour du tarif lors du changement de prestation
 const handleCatalogueChange = () => {
   const selected = cataloguePrestations.value.find(p => p.id == selectedCatalogueId.value)
   if (selected) {
-    tarif.value = selected.tarif || selected.prix || ''
+    tarif.value = selected.prix
   }
 }
 
@@ -121,22 +154,28 @@ const handleAddPrestation = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const selectedCat = cataloguePrestations.value.find(p => p.id == selectedCatalogueId.value)
-    const titrePrestation = selectedCat ? (selectedCat.titre || selectedCat.nom) : 'Prestation'
+    if (!selectedCatalogueId.value) {
+      alert('Veuillez sélectionner une prestation.')
+      return
+    }
+
+    const qteCalc = parseFloat(dureeCalculee.value) || 1.0
+
+    // Génération d'un numéro de document si nécessaire
+    const numeroInterv = 'PREST-' + Math.floor(1000 + Math.random() * 9000)
 
     const payload = {
-      user_id: user.id,
       client_id: parseInt(selectedClientId.value),
-      titre: titrePrestation,
+      etablissement_id: siteId.value ? parseInt(siteId.value) : null,
+      prestation_id: parseInt(selectedCatalogueId.value),
       date: dateIntervention.value,
       heure_debut: heureDebut.value,
       heure_fin: heureFin.value,
-      montant: tarif.value ? parseFloat(tarif.value) : 0,
-      description: description.value
-    }
-
-    if (siteId.value) {
-      payload.site_id = parseInt(siteId.value)
+      quantite: qteCalc,
+      prix_final_ht: tarif.value ? parseFloat(tarif.value) : 0,
+      commentaire: description.value,
+      numero_intervention: numeroInterv,
+      statut: 'En attente'
     }
 
     const { error } = await supabase.from('interventions').insert([payload])
@@ -149,6 +188,7 @@ const handleAddPrestation = async () => {
     tarif.value = ''
     description.value = ''
     sitesSecondaires.value = []
+    cataloguePrestations.value = []
     showModal.value = false
 
     await fetchData()
@@ -180,7 +220,7 @@ onMounted(fetchData)
         <div class="flex justify-between items-start">
           <div>
             <h3 class="text-xs font-bold text-slate-900">{{ item.titre }}</h3>
-            <p class="text-xs font-medium text-slate-600 mt-0.5">{{ item.client_nom }}</p>
+            <p class="text-xs font-medium text-slate-600 mt-0.5">{{ item.client_nom }} <span v-if="item.site_txt !== '-'" class="text-slate-400">({{ item.site_txt }})</span></p>
           </div>
           <div class="text-right">
             <span class="text-[10px] text-slate-400 font-medium block">{{ item.date }}</span>
@@ -189,8 +229,8 @@ onMounted(fetchData)
         </div>
         
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
-          <span class="text-xs font-extrabold text-slate-900" v-if="item.montant">{{ item.montant }} €</span>
-          <span class="text-[11px] text-slate-500 italic truncate max-w-[200px]" v-if="item.description">{{ item.description }}</span>
+          <span class="text-xs font-extrabold text-slate-900" v-if="item.prix_final_ht">{{ (item.prix_final_ht * (item.quantite || 1)).toFixed(2) }} € HT</span>
+          <span class="text-[11px] text-slate-500 italic truncate max-w-[200px]" v-if="item.commentaire">{{ item.commentaire }}</span>
         </div>
       </div>
     </div>
@@ -221,7 +261,7 @@ onMounted(fetchData)
             <select v-model="siteId" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Adresse principale du client</option>
               <option v-for="s in sitesSecondaires" :key="s.id" :value="s.id">
-                {{ s.nom_site || s.adresse }}
+                {{ s.nom_site }}
               </option>
             </select>
           </div>
@@ -232,7 +272,7 @@ onMounted(fetchData)
             <select v-model="selectedCatalogueId" @change="handleCatalogueChange" required class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="" disabled>Sélectionner une prestation</option>
               <option v-for="p in cataloguePrestations" :key="p.id" :value="p.id">
-                {{ p.titre || p.nom }} ({{ p.tarif || p.prix || 0 }} €)
+                {{ p.designation }}
               </option>
             </select>
           </div>
