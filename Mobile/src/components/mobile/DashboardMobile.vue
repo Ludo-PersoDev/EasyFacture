@@ -1,15 +1,62 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../../supabase'
 
 const factures = ref([])
 const interventions = ref([])
 const loading = ref(true)
 
-// Filtres temporels (Année en cours par défaut, mois par défaut "tous")
+// Filtres temporels (Année en cours par défaut, mois par défaut "all")
 const currentYear = new Date().getFullYear().toString()
 const selectedYear = ref(currentYear)
 const selectedMonth = ref('all') // 'all' ou '01', '02', etc.
+const selectedWeek = ref(null) // null ou { debut: Date, fin: Date }
+
+// Génération dynamique des semaines en fonction du mois et de l'année choisis
+const semainesDuMois = computed(() => {
+  if (selectedMonth.value === 'all' || !selectedMonth.value) return []
+
+  const annee = parseInt(selectedYear.value)
+  const mois = parseInt(selectedMonth.value)
+  
+  const premierJour = new Date(annee, mois - 1, 1)
+  const dernierJour = new Date(annee, mois, 0) // Dernier jour du mois
+
+  let semaines = []
+  let debutCourant = new Date(premierJour)
+
+  while (debutCourant <= dernierJour) {
+    let finSemaine = new Date(debutCourant)
+    
+    // Calcul pour aller jusqu'au dimanche (jour 0 ou 7)
+    let jourSemaine = finSemaine.getDay() === 0 ? 7 : finSemaine.getDay()
+    let joursRestantsAvantDimanche = 7 - jourSemaine
+    
+    finSemaine.setDate(finSemaine.getDate() + joursRestantsAvantDimanche)
+
+    // Si la fin dépasse le mois, on bloque STRICTEMENT au dernier jour du mois
+    if (finSemaine > dernierJour) {
+      finSemaine = new Date(dernierJour)
+    }
+
+    semaines.push({
+      debut: new Date(debutCourant),
+      fin: new Date(finSemaine),
+      label: `Du ${debutCourant.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} au ${finSemaine.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`
+    })
+
+    // Passer au lundi suivant
+    debutCourant = new Date(finSemaine)
+    debutCourant.setDate(debutCourant.getDate() + 1)
+  }
+
+  return semaines
+})
+
+// Réinitialiser la semaine si on change de mois ou d'année
+watch([selectedMonth, selectedYear], () => {
+  selectedWeek.value = null
+})
 
 const fetchDashboardData = async () => {
   try {
@@ -40,26 +87,36 @@ const fetchDashboardData = async () => {
   }
 }
 
-// Filtrage des factures selon l'année et le mois sélectionnés
+// Fonction utilitaire pour vérifier si une date correspond aux filtres mois/semaine
+const correspondAuxFiltres = (dateString) => {
+  if (!dateString) return false
+  const date = new Date(dateString)
+  const yearMatch = date.getFullYear().toString() === selectedYear.value
+  const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
+  
+  if (!yearMatch || !monthMatch) return false
+
+  // Si une semaine spécifique est sélectionnée
+  if (selectedWeek.value) {
+    // Normalisation des heures pour comparer proprement les dates (ignorer l'heure)
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const debut = new Date(selectedWeek.value.debut.getFullYear(), selectedWeek.value.debut.getMonth(), selectedWeek.value.debut.getDate())
+    const fin = new Date(selectedWeek.value.fin.getFullYear(), selectedWeek.value.fin.getMonth(), selectedWeek.value.fin.getDate())
+    
+    return d >= debut && d <= fin
+  }
+
+  return true
+}
+
+// Filtrage des factures selon l'année, le mois et la semaine sélectionnés
 const filteredFactures = computed(() => {
-  return factures.value.filter(f => {
-    if (!f.date_creation) return false
-    const date = new Date(f.date_creation)
-    const yearMatch = date.getFullYear().toString() === selectedYear.value
-    const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
-    return yearMatch && monthMatch
-  })
+  return factures.value.filter(f => correspondAuxFiltres(f.date_creation))
 })
 
-// Filtrage des interventions selon l'année et le mois sélectionnés
+// Filtrage des interventions selon l'année, le mois et la semaine sélectionnés
 const filteredInterventions = computed(() => {
-  return interventions.value.filter(i => {
-    if (!i.date) return false
-    const date = new Date(i.date)
-    const yearMatch = date.getFullYear().toString() === selectedYear.value
-    const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
-    return yearMatch && monthMatch
-  })
+  return interventions.value.filter(i => correspondAuxFiltres(i.date))
 })
 
 // Calculs dynamiques basés sur les filtres
@@ -108,29 +165,44 @@ onMounted(() => {
       <p class="text-[11px] text-blue-100 mt-0.5">Pilotage de votre activité sur le terrain.</p>
     </div>
 
-    <!-- Filtres temporels (Année & Mois) -->
-    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex gap-2">
-      <select v-model="selectedYear" class="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none">
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
-        <option value="2024">2024</option>
-      </select>
+    <!-- Filtres temporels (Année, Mois & Semaine) -->
+    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+      <div class="flex gap-2">
+        <select v-model="selectedYear" class="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none">
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+        </select>
 
-      <select v-model="selectedMonth" class="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none">
-        <option value="all">Tous les mois</option>
-        <option value="01">Janvier</option>
-        <option value="02">Février</option>
-        <option value="03">Mars</option>
-        <option value="04">Avril</option>
-        <option value="05">Mai</option>
-        <option value="06">Juin</option>
-        <option value="07">Juillet</option>
-        <option value="08">Août</option>
-        <option value="09">Septembre</option>
-        <option value="10">Octobre</option>
-        <option value="11">Novembre</option>
-        <option value="12">Décembre</option>
-      </select>
+        <select v-model="selectedMonth" class="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none">
+          <option value="all">Tous les mois</option>
+          <option value="01">Janvier</option>
+          <option value="02">Février</option>
+          <option value="03">Mars</option>
+          <option value="04">Avril</option>
+          <option value="05">Mai</option>
+          <option value="06">Juin</option>
+          <option value="07">Juillet</option>
+          <option value="08">Août</option>
+          <option value="09">Septembre</option>
+          <option value="10">Octobre</option>
+          <option value="11">Novembre</option>
+          <option value="12">Décembre</option>
+        </select>
+      </div>
+
+      <!-- Filtre de semaine (dépendant du mois) -->
+      <div>
+        <select 
+          v-model="selectedWeek" 
+          :disabled="selectedMonth === 'all'" 
+          class="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none disabled:bg-slate-100 disabled:text-slate-400">
+          <option :value="null">Toutes les semaines du mois</option>
+          <option v-for="(sem, index) in semainesDuMois" :key="index" :value="sem">
+            {{ sem.label }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <!-- Grille des cartes de pilotage -->
