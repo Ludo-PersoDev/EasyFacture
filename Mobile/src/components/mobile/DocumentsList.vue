@@ -11,11 +11,10 @@ const fetchDocuments = async () => {
   try {
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // 1. Récupération des documents
+    // 1. Récupération des documents (sans le tri sur created_at)
     const { data: docsData, error: docsError } = await supabase
       .from(table)
       .select('*')
-      .order('created_at', { ascending: false })
 
     if (docsError) throw docsError
 
