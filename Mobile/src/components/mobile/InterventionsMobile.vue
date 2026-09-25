@@ -246,11 +246,11 @@ onMounted(fetchData)
           </span>
           <span v-else class="text-xs text-slate-400">0.00 € HT</span>
 
-          <!-- Badge du statut dynamique calculé -->
+          <!-- Badge du statut dynamique calculé (Facturée en rouge vif) -->
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" :class="{
             'bg-blue-50 text-blue-700 border border-blue-100': item.statut_calcule === 'Planifiée',
             'bg-amber-50 text-amber-700 border border-amber-100': item.statut_calcule === 'Réalisée',
-            'bg-indigo-50 text-indigo-700 border border-indigo-100': item.statut_calcule === 'Facturée',
+            'bg-rose-50 text-rose-600 border border-rose-200': item.statut_calcule === 'Facturée',
             'bg-emerald-50 text-emerald-700 border border-emerald-100': item.statut_calcule === 'Payée'
           }">
             {{ item.statut_calcule }}
