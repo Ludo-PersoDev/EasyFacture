@@ -106,9 +106,9 @@ onMounted(() => {
 
     <!-- Grille de 4 cartes (Pleine largeur) -->
     <div class="grid grid-cols-2 gap-3">
-      <!-- 1. CA Total -->
+      <!-- 1. CA Total Facturé -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CA Total Période</span>
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CA Total Facturé</span>
         <div class="text-base font-extrabold text-slate-900 mt-2">
           {{ loading ? '...' : totalCa.toFixed(2) }} €
         </div>
