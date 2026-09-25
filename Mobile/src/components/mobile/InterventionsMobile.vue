@@ -41,10 +41,10 @@ const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // 1. Récupération des interventions avec jointures
+    // 1. Récupération explicite des interventions et de leur statut réel
     const { data: interData, error: interError } = await supabase
       .from('interventions')
-      .select('*, clients(nom_societe), prestations(designation), etablissements(nom_site)')
+      .select('id, client_id, prestation_id, etablissement_id, date, heure_debut, heure_fin, quantite, prix_final_ht, commentaire, statut, clients(nom_societe), prestations(designation), etablissements(nom_site)')
       .order('date', { ascending: false })
 
     if (interError) throw interError
@@ -72,7 +72,8 @@ const fetchData = async () => {
         ...item,
         client_nom: clientNom || clientsMap[item.client_id] || 'Client non spécifié',
         titre: prestNom || item.titre || 'Prestation',
-        site_txt: etabNom || '-'
+        site_txt: etabNom || '-',
+        statut: item.statut || 'En attente'
       }
     })
 
@@ -226,20 +227,21 @@ onMounted(fetchData)
           </div>
         </div>
         
-        <!-- Ligne inférieure : Montant à gauche, Statut à droite -->
+        <!-- Ligne inférieure : Montant à gauche, Vrai statut Supabase à droite -->
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
           <span class="text-xs font-extrabold text-slate-900" v-if="item.prix_final_ht">
             {{ (item.prix_final_ht * (item.quantite || 1)).toFixed(2) }} € HT
           </span>
           <span v-else class="text-xs text-slate-400">0.00 € HT</span>
 
-          <!-- Badge de statut dynamique -->
+          <!-- Badge relié au champ 'statut' de la table -->
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" :class="{
             'bg-amber-50 text-amber-700 border border-amber-100': item.statut === 'En attente',
+            'bg-blue-50 text-blue-700 border border-blue-100': item.statut === 'Planifiée' || item.statut === 'En cours',
             'bg-emerald-50 text-emerald-700 border border-emerald-100': item.statut === 'Facturée' || item.statut === 'Terminée',
-            'bg-slate-100 text-slate-600 border border-slate-200': !item.statut
+            'bg-slate-100 text-slate-600 border border-slate-200': !['En attente', 'Planifiée', 'En cours', 'Facturée', 'Terminée'].includes(item.statut)
           }">
-            {{ item.statut || 'En attente' }}
+            {{ item.statut }}
           </span>
         </div>
       </div>
