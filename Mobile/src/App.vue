@@ -16,12 +16,29 @@ const authError = ref('')
 // Onglet actif pour la navigation basse mobile
 const currentTab = ref('dashboard')
 
+// États pour la modale Profil
+const showProfileModal = ref(false)
+const userEmail = ref('')
+const newPrenom = ref('')
+const newPassword = ref('')
+const profileLoading = ref(false)
+const profileMessage = ref('')
+
 onMounted(async () => {
   const { data } = await supabase.auth.getSession()
   session.value = data.session
 
+  if (session.value?.user) {
+    userEmail.value = session.value.user.email || ''
+    newPrenom.value = session.value.user.user_metadata?.prenom || ''
+  }
+
   supabase.auth.onAuthStateChange((_event, _session) => {
     session.value = _session
+    if (_session?.user) {
+      userEmail.value = _session.user.email || ''
+      newPrenom.value = _session.user.user_metadata?.prenom || ''
+    }
   })
 })
 
@@ -38,6 +55,36 @@ const handleLogin = async () => {
 
 const handleLogout = async () => {
   await supabase.auth.signOut()
+}
+
+const updateProfile = async () => {
+  profileLoading.value = true
+  profileMessage.value = ''
+  
+  try {
+    const updates = {
+      data: { prenom: newPrenom.value }
+    }
+    
+    if (newPassword.value.trim() !== '') {
+      updates.password = newPassword.value
+    }
+
+    const { error } = await supabase.auth.updateUser(updates)
+    if (error) throw error
+
+    profileMessage.value = 'Profil mis à jour avec succès !'
+    newPassword.value = ''
+    
+    setTimeout(() => {
+      showProfileModal.value = false
+      profileMessage.value = ''
+    }, 1500)
+  } catch (err) {
+    profileMessage.value = 'Erreur : ' + err.message
+  } finally {
+    profileLoading.value = false
+  }
 }
 </script>
 
@@ -78,9 +125,16 @@ const handleLogout = async () => {
       <div class="font-bold text-base text-slate-900 flex items-center gap-2">
         <span class="material-icons text-blue-600">bolt</span> EasyFacture <span class="text-xs font-normal text-slate-400">Mobile</span>
       </div>
-      <button @click="handleLogout" class="text-slate-400 hover:text-red-600 p-1">
-        <span class="material-icons text-sm">logout</span>
-      </button>
+      
+      <!-- Boutons profil & déconnexion groupés -->
+      <div class="flex items-center gap-1">
+        <button @click="showProfileModal = true" class="text-slate-400 hover:text-blue-600 p-1 transition" title="Mon Profil">
+          <span class="material-icons text-lg">account_circle</span>
+        </button>
+        <button @click="handleLogout" class="text-slate-400 hover:text-red-600 p-1 transition" title="Se déconnecter">
+          <span class="material-icons text-sm">logout</span>
+        </button>
+      </div>
     </header>
 
     <!-- Corps dynamique selon l'onglet -->
@@ -90,6 +144,51 @@ const handleLogout = async () => {
       <ClientsCatalogue v-else-if="currentTab === 'clients'" />
       <InterventionsMobile v-else-if="currentTab === 'interventions'" />
     </main>
+
+    <!-- MODALE PROFIL -->
+    <div v-if="showProfileModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-xl">
+        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 class="font-bold text-slate-800 text-sm">Mon Profil</h3>
+          <button @click="showProfileModal = false" class="text-slate-400 hover:text-slate-600">
+            <span class="material-icons text-base">close</span>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <!-- Email (Lecture seule) -->
+          <div>
+            <label class="block font-medium text-slate-500 mb-1">Adresse email</label>
+            <input type="email" :value="userEmail" disabled class="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-lg p-2.5 cursor-not-allowed" />
+          </div>
+
+          <!-- Prénom (Modifiable) -->
+          <div>
+            <label class="block font-medium text-slate-700 mb-1">Prénom</label>
+            <input type="text" v-model="newPrenom" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 outline-none focus:border-blue-500" />
+          </div>
+
+          <!-- Nouveau mot de passe (Optionnel) -->
+          <div>
+            <label class="block font-medium text-slate-700 mb-1">Nouveau mot de passe (optionnel)</label>
+            <input type="password" v-model="newPassword" placeholder="Laisser vide pour ne pas changer" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-800 outline-none focus:border-blue-500" />
+          </div>
+
+          <p v-if="profileMessage" :class="profileMessage.includes('Erreur') ? 'text-red-500' : 'text-emerald-600'" class="font-medium text-center">
+            {{ profileMessage }}
+          </p>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button @click="showProfileModal = false" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium py-2.5 rounded-lg transition">
+            Annuler
+          </button>
+          <button @click="updateProfile" :disabled="profileLoading" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2.5 rounded-lg transition disabled:opacity-50">
+            {{ profileLoading ? 'Enregistrement...' : 'Enregistrer' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Barre de Navigation Basse (Bottom Nav) -->
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2 px-6 flex justify-around items-center z-30 shadow-lg">
