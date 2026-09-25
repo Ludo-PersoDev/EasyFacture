@@ -11,8 +11,8 @@ const fetchParametres = async () => {
   try {
     const { data, error } = await supabase.from('parametres').select('*').single()
     if (!error && data) {
-      entrepriseExoneree = !!data.tva_exoneree
-      if (entrepriseExoneree) {
+      entrepriseExoneree.value = !!data.tva_exoneree
+      if (entrepriseExoneree.value) {
         formPresta.value.taux_tva = 0.0
       }
     }
@@ -291,7 +291,7 @@ const creerPrestation = async () => {
   }
 
   const payload = { ...formPresta.value }
-  if (entrepriseExoneree) {
+  if (entrepriseExoneree.value) {
     payload.taux_tva = 0.0
   }
 
@@ -304,7 +304,7 @@ const creerPrestation = async () => {
       designation: '',
       unite: 'Heure',
       prix_ht: 0,
-      taux_tva: entrepriseExoneree ? 0.0 : 20.0
+      taux_tva: entrepriseExoneree.value ? 0.0 : 20.0
     }
   } catch (err) {
     alert('Erreur lors de la création : ' + err.message)
