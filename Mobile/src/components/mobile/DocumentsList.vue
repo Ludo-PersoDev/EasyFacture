@@ -27,7 +27,6 @@ const fetchDocuments = async () => {
       
       if (!clientsError && clientsData) {
         clientsData.forEach(client => {
-          // On enregistre sous toutes les formes possibles d'ID (string, number) pour être blindé
           if (client.id !== undefined) {
             clientsMap[client.id] = client
             clientsMap[String(client.id)] = client
@@ -42,13 +41,13 @@ const fetchDocuments = async () => {
       console.warn("Exception clients :", e)
     }
 
-    // 3. Association des noms
+    // Date du jour au format YYYY-MM-DD pour comparer les échéances
+    const today = new Date().toISOString().split('T')[0]
+
+    // 3. Association des noms et calcul du retard
     documents.value = (docsData || []).map(doc => {
-      // Gestion des différents noms possibles pour le numéro et le client
       const numeroDoc = doc.numero_facture || doc.numero_devis || doc.numero || 'Brouillon'
-      
       const directName = doc.nom_client || doc.client_nom || doc.client_name || doc.nom
-      
       const clientObj = clientsMap[doc.client_id] || clientsMap[String(doc.client_id)] || null
       
       const resolvedName = directName || 
@@ -57,10 +56,17 @@ const fetchDocuments = async () => {
                            clientObj?.prenom || 
                            (doc.client_id ? `Client ID: ${doc.client_id}` : 'Client non spécifié')
 
+      // Vérification si la facture est en retard (uniquement pour les factures non payées dont la date d'échéance est dépassée)
+      const isRetard = activeTab.value === 'factures' && 
+                       doc.statut !== 'Payée' && 
+                       doc.date_echeance && 
+                       doc.date_echeance < today
+
       return {
         ...doc,
         numero_ffiche: numeroDoc,
-        resolved_client_name: resolvedName
+        resolved_client_name: resolvedName,
+        is_retard: isRetard
       }
     })
 
@@ -72,20 +78,17 @@ const fetchDocuments = async () => {
 }
 
 const viewPdf = async (doc) => {
-  // On récupère le chemin relatif du fichier (ex: a053cade.../factures/FAC-2026-0005.pdf)
-  // Si tu n'as que l'URL complète en base, on extrait la partie après /public/documents/
   let path = doc.pdf_url
   if (path && path.includes('/public/documents/')) {
     path = path.split('/public/documents/')[1]
   }
 
   if (!path) {
-    alert('Aucun chemin de fichier valide trouvé.')
+    alert('Aucun fichier PDF enregistré pour ce document.')
     return
   }
 
   try {
-    // On génère une URL signée valable 60 secondes
     const { data, error } = await supabase.storage
       .from('documents')
       .createSignedUrl(path, 60)
@@ -98,8 +101,7 @@ const viewPdf = async (doc) => {
       alert('Impossible de générer le lien sécurisé du PDF.')
     }
   } catch (err) {
-    console.error("Erreur génération URL signée:", err)
-    // Fallback : si l'URL signée échoue, on tente l'ouverture directe de l'URL brute
+    console.error("Erreur ouverture PDF:", err)
     window.open(doc.pdf_url, '_blank')
   }
 }
@@ -135,7 +137,6 @@ onMounted(fetchDocuments)
       <div v-for="doc in documents" :key="doc.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
         <div class="flex justify-between items-start">
           <div>
-            <!-- Utilisation du numéro correct (numero_facture / numero_devis) -->
             <span class="text-xs font-bold text-slate-900">{{ doc.numero_ffiche }}</span>
             
             <!-- Nom du client résolu -->
@@ -149,13 +150,14 @@ onMounted(fetchDocuments)
             </p>
           </div>
 
-          <span :class="doc.statut === 'Payée' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'" class="text-[10px] px-2 py-0.5 rounded-full border font-medium">
-            {{ doc.statut || 'En attente' }}
+          <!-- Estampille dynamique (En retard, Payée, ou autre statut) -->
+          <span :class="doc.is_retard ? 'bg-rose-50 text-rose-700 border-rose-100' : (doc.statut === 'Payée' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100')" class="text-[10px] px-2 py-0.5 rounded-full border font-medium">
+            {{ doc.is_retard ? 'En retard' : (doc.statut || 'En attente') }}
           </span>
         </div>
 
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
-          <span class="text-sm font-extrabold text-slate-900">{{ doc.total_ttc || 0 }} €</span>
+          <span class="text-sm font-extrabold text-slate-900">{{ doc.total_ttc || doc.montant_ttc || 0 }} €</span>
           <button @click="viewPdf(doc)" class="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">
             <span class="material-icons text-sm">visibility</span> Voir PDF
           </button>
