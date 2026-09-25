@@ -1,38 +1,70 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../../supabase'
 
-const totalCaMois = ref(0)
-const totalEncaisse = ref(0)
-const facturesARecouvrir = ref(0)
+const factures = ref([])
 const loading = ref(true)
 
-// Simulation de récupération rapide des indicateurs financiers et de Factur-X
+// Filtres temporels (Année en cours par défaut, mois par défaut "tous")
+const currentYear = new Date().getFullYear().toString()
+const selectedYear = ref(currentYear)
+const selectedMonth = ref('all') // 'all' ou '01', '02', etc.
+
 const fetchDashboardData = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Exemple de requête sur les factures pour alimenter les chiffres clés du mois
-    const { data: factures, error } = await supabase
+    const { data, error } = await supabase
       .from('factures')
-      .select('total_ttc, statut')
+      .select('montant_ttc, statut, date_emission, date_echeance, facturx_statut')
       .eq('user_id', user.id)
 
     if (error) throw error
-
-    if (factures) {
-      totalCaMois.value = factures.reduce((acc, f) => acc + (f.total_ttc || 0), 0)
-      totalEncaisse.value = factures.filter(f => f.statut === 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0)
-	  totalImpaye.value = factures.filter(f => f.statut !== 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0)
-      facturesARecouvrir.value = factures.filter(f => f.statut !== 'Payée').length
-    }
+    factures.value = data || []
   } catch (err) {
     console.error("Erreur chargement dashboard :", err)
   } finally {
     loading.value = false
   }
 }
+
+// Filtrage des factures selon l'année et le mois sélectionnés
+const filteredFactures = computed(() => {
+  return factures.value.filter(f => {
+    if (!f.date_emission) return false
+    const date = new Date(f.date_emission)
+    const yearMatch = date.getFullYear().toString() === selectedYear.value
+    const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
+    return yearMatch && monthMatch
+  })
+})
+
+// Calculs dynamiques basés sur les filtres
+const totalCa = computed(() => filteredFactures.value.reduce((acc, f) => acc + (f.montant_ttc || 0), 0))
+
+const totalEncaisse = computed(() => {
+  return filteredFactures.value
+    .filter(f => f.statut === 'Payée')
+    .reduce((acc, f) => acc + (f.montant_ttc || 0), 0)
+})
+
+const totalEnAttente = computed(() => {
+  return filteredFactures.value
+    .filter(f => f.statut !== 'Payée')
+    .reduce((acc, f) => acc + (f.montant_ttc || 0), 0)
+})
+
+const retardsList = computed(() => {
+  const aujourdHui = new Date()
+  return filteredFactures.value.filter(f => {
+    if (f.statut === 'Payée' || !f.date_echeance) return false
+    return new Date(f.date_echeance) < aujourdHui
+  })
+})
+
+const totalRetardMontant = computed(() => retardsList.value.reduce((acc, f) => acc + (f.montant_ttc || 0), 0))
+const totalRetardCount = computed(() => retardsList.value.length)
 
 onMounted(() => {
   fetchDashboardData()
@@ -42,24 +74,72 @@ onMounted(() => {
 <template>
   <div class="space-y-4">
     <!-- En-tête de bienvenue -->
-    <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 rounded-2xl shadow-md">
-      <h1 class="text-lg font-bold">Bonjour 👋</h1>
-      <p class="text-xs text-blue-100 mt-1">Vue d'ensemble de votre activité sur le terrain.</p>
+    <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-md">
+      <h1 class="text-base font-bold">Bonjour Ludovic 👋</h1>
+      <p class="text-[11px] text-blue-100 mt-0.5">Pilotage de votre activité sur le terrain.</p>
     </div>
 
-    <!-- Indicateurs Clés (Chiffres et infos clés) -->
-    <div class="grid grid-cols-3 gap-3">
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">CA Total / En cours</span>
-        <div class="text-xl font-extrabold text-slate-900 mt-1">
-          {{ loading ? '...' : totalCaMois.toFixed(2) }} €
+    <!-- Filtres temporels (Année & Mois) -->
+    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex gap-2">
+      <select v-model="selectedYear" class="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none">
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+
+      <select v-model="selectedMonth" class="flex-1 bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg p-2 font-medium outline-none">
+        <option value="all">Tous les mois</option>
+        <option value="01">Janvier</option>
+        <option value="02">Février</option>
+        <option value="03">Mars</option>
+        <option value="04">Avril</option>
+        <option value="05">Mai</option>
+        <option value="06">Juin</option>
+        <option value="07">Juillet</option>
+        <option value="08">Août</option>
+        <option value="09">Septembre</option>
+        <option value="10">Octobre</option>
+        <option value="11">Novembre</option>
+        <option value="12">Décembre</option>
+      </select>
+    </div>
+
+    <!-- Grille de 4 cartes (Pleine largeur) -->
+    <div class="grid grid-cols-2 gap-3">
+      <!-- 1. CA Total -->
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CA Total Période</span>
+        <div class="text-base font-extrabold text-slate-900 mt-2">
+          {{ loading ? '...' : totalCa.toFixed(2) }} €
         </div>
       </div>
 
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Encaissé</span>
-        <div class="text-xl font-extrabold text-emerald-600 mt-1">
+      <!-- 2. Encaissé -->
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Encaissé</span>
+        <div class="text-base font-extrabold text-emerald-600 mt-2">
           {{ loading ? '...' : totalEncaisse.toFixed(2) }} €
+        </div>
+      </div>
+
+      <!-- 3. En attente -->
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">En attente</span>
+        <div class="text-base font-extrabold text-amber-600 mt-2">
+          {{ loading ? '...' : totalEnAttente.toFixed(2) }} €
+        </div>
+      </div>
+
+      <!-- 4. Paiements en retard -->
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">En retard</span>
+          <span v-if="!loading && totalRetardCount > 0" class="text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded-full border border-red-100">
+            {{ totalRetardCount }}
+          </span>
+        </div>
+        <div class="text-base font-extrabold text-red-600 mt-2">
+          {{ loading ? '...' : totalRetardMontant.toFixed(2) }} €
         </div>
       </div>
     </div>
@@ -70,7 +150,7 @@ onMounted(() => {
         <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
           <span class="material-icons text-sky-500 text-base">cloud_done</span> Passerelle Factur-X
         </h2>
-        <span class="text-[10px] font-medium px-2 py-0.5 bg-sky-50 text-sky-700 rounded-full border border-sky-100">Mode Lecture</span>
+        <span class="text-[10px] font-medium px-2 py-0.5 bg-sky-50 text-sky-700 rounded-full border border-sky-100">Lecture seule</span>
       </div>
       
       <div class="flex justify-between items-center text-xs py-2 border-t border-slate-100">
