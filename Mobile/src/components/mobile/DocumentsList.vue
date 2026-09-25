@@ -14,22 +14,37 @@ const fetchDocuments = async () => {
 
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // Correction de la syntaxe de jointure Supabase avec le point d'exclamation (!)
-    const { data, error } = await supabase
+    // 1. On récupère les documents de la table active
+    const { data: docsData, error: docsError } = await supabase
       .from(table)
-      .select(`
-        *,
-        clients!client_id (
-          nom,
-          nom_societe,
-          prenom
-        )
-      `)
+      .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
-    if (error) throw error
-    documents.value = data || []
+    if (docsError) throw docsError
+
+    // 2. On récupère tous les clients pour pouvoir associer les noms par leur ID
+    const { data: clientsData, error: clientsError } = await supabase
+      .from('clients')
+      .select('id, nom, nom_societe, prenom')
+      .eq('user_id', user.id)
+
+    if (clientsError) throw clientsError
+
+    // Création d'un dictionnaire/map pour un accès instantané aux clients par ID
+    const clientsMap = {};
+    if (clientsData) {
+      clientsData.forEach(client => {
+        clientsMap[client.id] = client;
+      })
+    }
+
+    // 3. On associe manuellement le client à chaque document via client_id
+    documents.value = (docsData || []).map(doc => ({
+      ...doc,
+      client_info: clientsMap[doc.client_id] || null
+    }))
+
   } catch (err) {
     console.error('Erreur chargement documents:', err)
   } finally {
@@ -89,9 +104,9 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-start">
           <div>
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
-            <!-- Affichage du nom de la société ou du contact principal -->
+            <!-- Affichage du nom de la société ou du contact récupéré via le dictionnaire -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.clients?.nom_societe || doc.clients?.nom || doc.clients?.prenom || 'Client inconnu' }}
+              {{ doc.client_info?.nom_societe || doc.client_info?.nom || doc.client_info?.prenom || 'Client inconnu' }}
             </p>
             <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
