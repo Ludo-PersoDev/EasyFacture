@@ -19,10 +19,9 @@ const fetchDocuments = async () => {
       .from(table)
       .select(`
         *,
-        clients:client_id (
-          nom,
+        clients:id (
           nom_societe,
-          prenom
+          contact
         )
       `)
       .eq('user_id', user.id)
