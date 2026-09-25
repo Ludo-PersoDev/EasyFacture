@@ -9,42 +9,16 @@ const loading = ref(true)
 const fetchDocuments = async () => {
   loading.value = true
   try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // 1. On récupère les documents de la table active
-    const { data: docsData, error: docsError } = await supabase
+    // Requête directe sans filtre restrictif pour tester l'affichage brut
+    const { data, error } = await supabase
       .from(table)
       .select('*')
-      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
-    if (docsError) throw docsError
-
-    // 2. On récupère tous les clients pour pouvoir associer les noms par leur ID
-    const { data: clientsData, error: clientsError } = await supabase
-      .from('clients')
-      .select('id, nom_societe')
-      .eq('user_id', user.id)
-
-    if (clientsError) throw clientsError
-
-    // Création d'un dictionnaire/map pour un accès instantané aux clients par ID
-    const clientsMap = {};
-    if (clientsData) {
-      clientsData.forEach(client => {
-        clientsMap[client.id] = client;
-      })
-    }
-
-    // 3. On associe manuellement le client à chaque document via client_id
-    documents.value = (docsData || []).map(doc => ({
-      ...doc,
-      client_info: clientsMap[doc.client_id] || null
-    }))
-
+    if (error) throw error
+    documents.value = data || []
   } catch (err) {
     console.error('Erreur chargement documents:', err)
   } finally {
@@ -55,7 +29,7 @@ const fetchDocuments = async () => {
 const viewPdf = async (doc) => {
   const path = doc.pdf_path || doc.fichier_pdf
   if (!path) {
-    alert('Aucun fichier PDF enregistré pour ce document. Générez-le depuis la version Desktop.')
+    alert('Aucun fichier PDF enregistré.')
     return
   }
 
@@ -63,12 +37,9 @@ const viewPdf = async (doc) => {
     const { data } = supabase.storage.from('documents').getPublicUrl(path)
     if (data?.publicUrl) {
       window.open(data.publicUrl, '_blank')
-    } else {
-      alert('Impossible de récupérer l’URL du document.')
     }
   } catch (err) {
     console.error("Erreur ouverture PDF:", err)
-    alert('Erreur lors de l’accès au stockage.')
   }
 }
 
@@ -104,16 +75,14 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-start">
           <div>
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
-            <!-- Affichage du nom de la société ou du contact récupéré via le dictionnaire -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.client_info?.nom_societe || 'Client inconnu' }}
+              Client ID : {{ doc.client_id }}
             </p>
-            <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
               Échéance : {{ doc.date_echeance }}
             </p>
           </div>
-          <span :class="doc.statut === 'Payée' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'" class="text-[10px] px-2 py-0.5 rounded-full border font-medium">
+          <span class="text-[10px] px-2 py-0.5 rounded-full border font-medium bg-amber-50 text-amber-700 border-amber-100">
             {{ doc.statut || 'En attente' }}
           </span>
         </div>
@@ -121,7 +90,7 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
           <span class="text-sm font-extrabold text-slate-900">{{ doc.montant_ttc || 0 }} €</span>
           <button @click="viewPdf(doc)" class="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">
-            <span class="material-icons text-sm">visibility</span> Voir PDF
+            Voir PDF
           </button>
         </div>
       </div>
