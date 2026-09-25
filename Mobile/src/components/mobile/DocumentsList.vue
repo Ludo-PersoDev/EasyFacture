@@ -14,15 +14,15 @@ const fetchDocuments = async () => {
 
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // On récupère les documents avec les infos du client associé si la relation existe, 
-    // ou on s'adapte aux colonnes habituelles (client_nom / clients(nom))
+    // Requête avec jointure explicite sur client_id
     const { data, error } = await supabase
       .from(table)
       .select(`
         *,
-        clients (
+        clients:client_id (
           nom,
-          entreprise
+          nom_societe,
+          prenom
         )
       `)
       .eq('user_id', user.id)
@@ -38,7 +38,6 @@ const fetchDocuments = async () => {
 }
 
 const viewPdf = async (doc) => {
-  // Vérification de la présence d'un chemin de fichier PDF
   const path = doc.pdf_path || doc.fichier_pdf
   if (!path) {
     alert('Aucun fichier PDF enregistré pour ce document. Générez-le depuis la version Desktop.')
@@ -46,9 +45,7 @@ const viewPdf = async (doc) => {
   }
 
   try {
-    // Récupération de l'URL publique depuis le bucket Supabase (souvent nommé 'documents' ou 'pdfs')
     const { data } = supabase.storage.from('documents').getPublicUrl(path)
-    
     if (data?.publicUrl) {
       window.open(data.publicUrl, '_blank')
     } else {
@@ -92,11 +89,11 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-start">
           <div>
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
-            <!-- Affichage du nom du client (via la relation ou le champ direct) -->
+            <!-- Affichage du nom de la société ou du client récupéré via la table clients -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.clients?.nom || doc.clients?.entreprise || doc.client_nom || 'Client non spécifié' }}
+              {{ doc.clients?.nom_societe || doc.clients?.nom || doc.clients?.prenom || 'Client inconnu' }}
             </p>
-            <!-- Date d'échéance ou d'émission -->
+            <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
               Échéance : {{ doc.date_echeance }}
             </p>
