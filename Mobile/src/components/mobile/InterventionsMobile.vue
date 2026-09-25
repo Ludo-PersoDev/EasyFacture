@@ -160,8 +160,6 @@ const handleAddPrestation = async () => {
     }
 
     const qteCalc = parseFloat(dureeCalculee.value) || 1.0
-
-    // Génération d'un numéro de document si nécessaire
     const numeroInterv = 'PREST-' + Math.floor(1000 + Math.random() * 9000)
 
     const payload = {
@@ -255,8 +253,8 @@ onMounted(fetchData)
             </select>
           </div>
 
-          <!-- 2. Site / Établissement -->
-          <div>
+          <!-- 2. Site / Établissement (Masqué s'il n'y a pas d'établissements pour ce client) -->
+          <div v-if="sitesSecondaires.length > 0">
             <label class="block text-[11px] font-medium text-slate-500 mb-1">Site / Établissement</label>
             <select v-model="siteId" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Adresse principale du client</option>
