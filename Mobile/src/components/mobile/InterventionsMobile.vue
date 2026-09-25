@@ -41,10 +41,10 @@ const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // 1. Récupération explicite des interventions et de leur statut réel
+    // 1. Récupération des interventions avec jointure sur les factures pour le statut dynamique
     const { data: interData, error: interError } = await supabase
       .from('interventions')
-      .select('id, client_id, prestation_id, etablissement_id, date, heure_debut, heure_fin, quantite, prix_final_ht, commentaire, statut, clients(nom_societe), prestations(designation), etablissements(nom_site)')
+      .select('id, client_id, prestation_id, etablissement_id, date, heure_debut, heure_fin, quantite, prix_final_ht, commentaire, facture_id, clients(nom_societe), prestations(designation), etablissements(nom_site), factures(statut)')
       .order('date', { ascending: false })
 
     if (interError) throw interError
@@ -58,6 +58,8 @@ const fetchData = async () => {
       clientsMap[c.id] = c.nom_societe || `${c.prenom || ''} ${c.nom || ''}`.trim()
     })
 
+    const today = new Date().toISOString().split('T')[0]
+
     interventions.value = (interData || []).map(item => {
       const clientRel = item.clients
       const clientNom = clientRel ? (clientRel.nom_societe || clientRel[0]?.nom_societe) : null
@@ -68,12 +70,23 @@ const fetchData = async () => {
       const etabRel = item.etablissements
       const etabNom = etabRel ? (etabRel.nom_site || etabRel[0]?.nom_site) : null
 
+      const factureRel = item.factures
+      const statutFacture = factureRel ? (factureRel.statut || factureRel[0]?.statut) : null
+
+      // Logique de calcul du statut identique à la version Desktop
+      let statutCalcule = 'Planifiée'
+      if (item.facture_id) {
+        statutCalcule = statutFacture === 'Payée' ? 'Payée' : 'Facturée'
+      } else if (item.date) {
+        statutCalcule = item.date > today ? 'Planifiée' : 'Réalisée'
+      }
+
       return {
         ...item,
         client_nom: clientNom || clientsMap[item.client_id] || 'Client non spécifié',
         titre: prestNom || item.titre || 'Prestation',
         site_txt: etabNom || '-',
-        statut: item.statut || 'En attente'
+        statut_calcule: statutCalcule
       }
     })
 
@@ -173,8 +186,7 @@ const handleAddPrestation = async () => {
       quantite: qteCalc,
       prix_final_ht: tarif.value ? parseFloat(tarif.value) : 0,
       commentaire: description.value,
-      numero_intervention: numeroInterv,
-      statut: 'En attente'
+      numero_intervention: numeroInterv
     }
 
     const { error } = await supabase.from('interventions').insert([payload])
@@ -227,21 +239,21 @@ onMounted(fetchData)
           </div>
         </div>
         
-        <!-- Ligne inférieure : Montant à gauche, Vrai statut Supabase à droite -->
+        <!-- Ligne inférieure : Montant à gauche, Statut dynamique à droite -->
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
           <span class="text-xs font-extrabold text-slate-900" v-if="item.prix_final_ht">
             {{ (item.prix_final_ht * (item.quantite || 1)).toFixed(2) }} € HT
           </span>
           <span v-else class="text-xs text-slate-400">0.00 € HT</span>
 
-          <!-- Badge relié au champ 'statut' de la table -->
+          <!-- Badge du statut dynamique calculé -->
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" :class="{
-            'bg-amber-50 text-amber-700 border border-amber-100': item.statut === 'En attente',
-            'bg-blue-50 text-blue-700 border border-blue-100': item.statut === 'Planifiée' || item.statut === 'En cours',
-            'bg-emerald-50 text-emerald-700 border border-emerald-100': item.statut === 'Facturée' || item.statut === 'Terminée',
-            'bg-slate-100 text-slate-600 border border-slate-200': !['En attente', 'Planifiée', 'En cours', 'Facturée', 'Terminée'].includes(item.statut)
+            'bg-blue-50 text-blue-700 border border-blue-100': item.statut_calcule === 'Planifiée',
+            'bg-amber-50 text-amber-700 border border-amber-100': item.statut_calcule === 'Réalisée',
+            'bg-indigo-50 text-indigo-700 border border-indigo-100': item.statut_calcule === 'Facturée',
+            'bg-emerald-50 text-emerald-700 border border-emerald-100': item.statut_calcule === 'Payée'
           }">
-            {{ item.statut }}
+            {{ item.statut_calcule }}
           </span>
         </div>
       </div>
