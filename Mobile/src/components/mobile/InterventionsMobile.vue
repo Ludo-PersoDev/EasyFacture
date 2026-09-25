@@ -226,9 +226,21 @@ onMounted(fetchData)
           </div>
         </div>
         
+        <!-- Ligne inférieure : Montant à gauche, Statut à droite -->
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
-          <span class="text-xs font-extrabold text-slate-900" v-if="item.prix_final_ht">{{ (item.prix_final_ht * (item.quantite || 1)).toFixed(2) }} € HT</span>
-          <span class="text-[11px] text-slate-500 italic truncate max-w-[200px]" v-if="item.commentaire">{{ item.commentaire }}</span>
+          <span class="text-xs font-extrabold text-slate-900" v-if="item.prix_final_ht">
+            {{ (item.prix_final_ht * (item.quantite || 1)).toFixed(2) }} € HT
+          </span>
+          <span v-else class="text-xs text-slate-400">0.00 € HT</span>
+
+          <!-- Badge de statut dynamique -->
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" :class="{
+            'bg-amber-50 text-amber-700 border border-amber-100': item.statut === 'En attente',
+            'bg-emerald-50 text-emerald-700 border border-emerald-100': item.statut === 'Facturée' || item.statut === 'Terminée',
+            'bg-slate-100 text-slate-600 border border-slate-200': !item.statut
+          }">
+            {{ item.statut || 'En attente' }}
+          </span>
         </div>
       </div>
     </div>
