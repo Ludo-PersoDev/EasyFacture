@@ -13,11 +13,20 @@ const fetchDocuments = async () => {
     if (!user) return
 
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
+    
+    // On récupère les documents avec les infos du client associé si la relation existe, 
+    // ou on s'adapte aux colonnes habituelles (client_nom / clients(nom))
     const { data, error } = await supabase
       .from(table)
-      .select('*')
+      .select(`
+        *,
+        clients (
+          nom,
+          entreprise
+        )
+      `)
       .eq('user_id', user.id)
-      .order('date_creation', { ascending: false })
+      .order('created_at', { ascending: false })
 
     if (error) throw error
     documents.value = data || []
@@ -29,13 +38,25 @@ const fetchDocuments = async () => {
 }
 
 const viewPdf = async (doc) => {
-  if (!doc.pdf_url) {
-    alert('Aucun PDF disponible pour ce document.')
+  // Vérification de la présence d'un chemin de fichier PDF
+  const path = doc.pdf_path || doc.fichier_pdf
+  if (!path) {
+    alert('Aucun fichier PDF enregistré pour ce document. Générez-le depuis la version Desktop.')
     return
   }
-  const { data } = supabase.storage.from('documents').getPublicUrl(doc.pdf_url)
-  if (data?.publicUrl) {
-    window.open(data.publicUrl, '_blank')
+
+  try {
+    // Récupération de l'URL publique depuis le bucket Supabase (souvent nommé 'documents' ou 'pdfs')
+    const { data } = supabase.storage.from('documents').getPublicUrl(path)
+    
+    if (data?.publicUrl) {
+      window.open(data.publicUrl, '_blank')
+    } else {
+      alert('Impossible de récupérer l’URL du document.')
+    }
+  } catch (err) {
+    console.error("Erreur ouverture PDF:", err)
+    alert('Erreur lors de l’accès au stockage.')
   }
 }
 
@@ -44,6 +65,7 @@ onMounted(fetchDocuments)
 
 <template>
   <div class="space-y-4">
+    <!-- Sélecteur Factures / Devis -->
     <div class="flex bg-slate-200 p-1 rounded-xl">
       <button 
         @click="activeTab = 'factures'; fetchDocuments()" 
@@ -69,8 +91,15 @@ onMounted(fetchDocuments)
       <div v-for="doc in documents" :key="doc.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
         <div class="flex justify-between items-start">
           <div>
-            <span class="text-xs font-bold text-slate-900">{{ doc.numero_facture || doc.numero_devis || 'Brouillon' }}</span>
-            <p class="text-xs text-slate-500">{{ doc.client_id || 'Client inconnu' }}</p>
+            <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
+            <!-- Affichage du nom du client (via la relation ou le champ direct) -->
+            <p class="text-xs font-medium text-slate-600 mt-0.5">
+              {{ doc.clients?.nom || doc.clients?.entreprise || doc.client_nom || 'Client non spécifié' }}
+            </p>
+            <!-- Date d'échéance ou d'émission -->
+            <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
+              Échéance : {{ doc.date_echeance }}
+            </p>
           </div>
           <span :class="doc.statut === 'Payée' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'" class="text-[10px] px-2 py-0.5 rounded-full border font-medium">
             {{ doc.statut || 'En attente' }}
@@ -78,7 +107,7 @@ onMounted(fetchDocuments)
         </div>
 
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
-          <span class="text-sm font-extrabold text-slate-900">{{ doc.total_ttc || 0 }} €</span>
+          <span class="text-sm font-extrabold text-slate-900">{{ doc.montant_ttc || 0 }} €</span>
           <button @click="viewPdf(doc)" class="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">
             <span class="material-icons text-sm">visibility</span> Voir PDF
           </button>
