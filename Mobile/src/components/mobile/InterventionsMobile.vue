@@ -35,17 +35,33 @@ const fetchData = async () => {
 
     if (interError) throw interError
 
-    // 2. Récupération des clients
-    const { data: clientsData } = await supabase.from('clients').select('*')
-    if (clientsData) clients.value = clientsData
+    // 2. Récupération des clients (sécurisée)
+    let clientsData = []
+    try {
+      const res = await supabase.from('clients').select('*')
+      if (res.data) clientsData = res.data
+    } catch (e) {
+      console.warn("Table clients non accessible", e)
+    }
+    clients.value = clientsData
 
-    // 3. Récupération du catalogue des prestations de base (table 'catalogue_prestations' ou similaire, adapte si besoin)
-    const { data: catData } = await supabase.from('catalogue_prestations').select('*')
-    if (catData) cataloguePrestations.value = catData
+    // 3. Récupération du catalogue (sécurisée au cas où le nom de la table diffère)
+    try {
+      const resCat = await supabase.from('catalogue_prestations').select('*')
+      if (resCat.data) cataloguePrestations.value = resCat.data
+    } catch (e) {
+      // Fallback silencieux si la table n'existe pas sous ce nom
+      try {
+        const resCatAlt = await supabase.from('catalogue').select('*')
+        if (resCatAlt.data) cataloguePrestations.value = resCatAlt.data
+      } catch (err) {
+        console.warn("Catalogue non trouvé", err)
+      }
+    }
 
     // Dictionnaire clients
     const clientsMap = {}
-    (clientsData || []).forEach(c => {
+    clientsData.forEach(c => {
       clientsMap[c.id] = c.nom_societe || `${c.prenom || ''} ${c.nom || ''}`.trim()
     })
 
@@ -55,13 +71,13 @@ const fetchData = async () => {
     }))
 
   } catch (err) {
-    console.error('Erreur chargement:', err)
+    console.error('Erreur chargement global:', err)
   } finally {
     loading.value = false
   }
 }
 
-// Quand on sélectionne un client, on charge ses éventuels sites secondaires
+// Sélection du client et chargement de ses sites secondaires éventuels
 const handleClientChange = async () => {
   sitesSecondaires.value = []
   siteId.value = ''
@@ -69,17 +85,17 @@ const handleClientChange = async () => {
 
   try {
     const { data } = await supabase
-      .from('clients_sites') // ou la table gérant les sites secondaires de ton appli
+      .from('clients_sites')
       .select('*')
       .eq('client_id', selectedClientId.value)
     
     if (data) sitesSecondaires.value = data
   } catch (e) {
-    console.warn("Pas de sites secondaires ou table absente", e)
+    console.warn("Pas de sites secondaires pour ce client", e)
   }
 }
 
-// Quand on choisit une prestation dans le catalogue, on pré-remplit le titre et le tarif de base
+// Choix dans le catalogue pour pré-remplir
 const handleCatalogueChange = () => {
   const selected = cataloguePrestations.value.find(p => p.id == selectedCatalogueId.value)
   if (selected) {
@@ -93,19 +109,23 @@ const handleAddPrestation = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error } = await supabase.from('interventions').insert([
-      { 
-        user_id: user.id,
-        client_id: parseInt(selectedClientId.value),
-        titre: titre.value,
-        date: dateIntervention.value,
-        heure_debut: heureDebut.value,
-        heure_fin: heureFin.value,
-        montant: tarif.value ? parseFloat(tarif.value) : 0,
-        site_id: siteId.value ? parseInt(siteId.value) : null,
-        description: description.value 
-      }
-    ])
+    const payload = {
+      user_id: user.id,
+      client_id: parseInt(selectedClientId.value),
+      titre: titre.value,
+      date: dateIntervention.value,
+      heure_debut: heureDebut.value,
+      heure_fin: heureFin.value,
+      montant: tarif.value ? parseFloat(tarif.value) : 0,
+      description: description.value
+    }
+
+    // Ajout conditionnel du site si la colonne et la valeur existent
+    if (siteId.value) {
+      payload.site_id = parseInt(siteId.value)
+    }
+
+    const { error } = await supabase.from('interventions').insert([payload])
 
     if (error) throw error
 
@@ -116,6 +136,7 @@ const handleAddPrestation = async () => {
     tarif.value = ''
     description.value = ''
     siteId.value = ''
+    sitesSecondaires.value = []
     showModal.value = false
 
     await fetchData()
@@ -193,7 +214,7 @@ onMounted(fetchData)
             </select>
           </div>
 
-          <!-- 2. Choix depuis le catalogue (optionnel pour pré-remplir) -->
+          <!-- 2. Choix depuis le catalogue (optionnel) -->
           <div v-if="cataloguePrestations.length > 0">
             <label class="block text-[11px] font-medium text-slate-700 mb-1">2. Modèle du Catalogue (Optionnel)</label>
             <select v-model="selectedCatalogueId" @change="handleCatalogueChange" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
@@ -204,13 +225,13 @@ onMounted(fetchData)
             </select>
           </div>
 
-          <!-- Titre / Intitulé modifiable -->
+          <!-- Titre / Intitulé -->
           <div>
             <label class="block text-[11px] font-medium text-slate-700 mb-1">Intitulé de la prestation</label>
             <input v-model="titre" type="text" required placeholder="Ex: Cours particulier..." class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
-          <!-- Date et Tarif modifiable -->
+          <!-- Date et Tarif -->
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[11px] font-medium text-slate-700 mb-1">Date</label>
