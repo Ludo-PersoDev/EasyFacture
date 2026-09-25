@@ -19,7 +19,7 @@ const fetchDocuments = async () => {
       .from(table)
       .select(`
         *,
-        clients:id (
+        clients:client_id (
           nom_societe,
           contact
         )
@@ -90,7 +90,7 @@ onMounted(fetchDocuments)
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
             <!-- Affichage du nom de la société ou du client récupéré via la table clients -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.clients?.nom_societe || doc.clients?.nom || doc.clients?.prenom || 'Client inconnu' }}
+              {{ doc.clients?.nom_societe || doc.clients?.contact || doc.clients?.prenom || 'Client inconnu' }}
             </p>
             <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
