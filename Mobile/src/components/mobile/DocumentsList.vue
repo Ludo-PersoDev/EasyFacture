@@ -72,7 +72,7 @@ const fetchDocuments = async () => {
 }
 
 const viewPdf = async (doc) => {
-  const path = doc.pdf_path || doc.fichier_pdf
+  const path = doc.pdf_url
   if (!path) {
     alert('Aucun fichier PDF enregistré. Générez-le depuis la version Desktop.')
     return
