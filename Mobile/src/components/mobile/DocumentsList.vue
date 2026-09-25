@@ -11,34 +11,58 @@ const fetchDocuments = async () => {
   try {
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // 1. Récupération des documents (sans le tri sur created_at)
+    // 1. Récupération des documents
     const { data: docsData, error: docsError } = await supabase
       .from(table)
       .select('*')
 
     if (docsError) throw docsError
 
-    // 2. Récupération des clients pour associer les noms
+    // DEBUG : Affichons un document dans la console pour voir ses clés exactes (client_id, nom_client, etc.)
+    if (docsData && docsData.length > 0) {
+      console.log("Structure d'un document brut :", docsData[0])
+    }
+
+    // 2. Récupération des clients
     let clientsMap = {}
     try {
-      const { data: clientsData } = await supabase
+      const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
-        .select('id, nom, nom_societe, prenom')
+        .select('*') // On prend tout pour voir les colonnes disponibles
       
-      if (clientsData) {
+      if (clientsError) {
+        console.warn("Erreur chargement table clients :", clientsError.message)
+      } else if (clientsData) {
+        console.log("Clients chargés avec succès :", clientsData)
         clientsData.forEach(client => {
+          // On indexe par l'id (peu importe le type de clé primaire)
           clientsMap[client.id] = client
+          if (client.uuid) clientsMap[client.uuid] = client
         })
       }
     } catch (e) {
-      console.warn("Impossible de charger les clients", e)
+      console.warn("Exception clients :", e)
     }
 
-    // 3. Association des infos clients aux documents
-    documents.value = (docsData || []).map(doc => ({
-      ...doc,
-      client_info: clientsMap[doc.client_id] || null
-    }))
+    // 3. Association avec tolérance maximale sur les noms de colonnes
+    documents.value = (docsData || []).map(doc => {
+      // Si le nom est déjà présent directement dans la facture
+      const directName = doc.nom_client || doc.client_nom || doc.client_name || doc.nom
+
+      // Sinon on cherche via la map du client_id
+      const clientObj = clientsMap[doc.client_id] || clientsMap[doc.client_uuid] || null
+      
+      const resolvedName = directName || 
+                           clientObj?.nom_societe || 
+                           clientObj?.nom || 
+                           clientObj?.prenom || 
+                           (doc.client_id ? `ID: ${doc.client_id}` : 'Client non spécifié')
+
+      return {
+        ...doc,
+        resolved_client_name: resolvedName
+      }
+    })
 
   } catch (err) {
     console.error('Erreur chargement documents:', err)
@@ -99,9 +123,9 @@ onMounted(fetchDocuments)
           <div>
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
             
-            <!-- Nom de la société ou du contact -->
+            <!-- Nom du client résolu -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.client_info?.nom_societe || doc.client_info?.nom || doc.client_info?.prenom || 'Client non spécifié' }}
+              {{ doc.resolved_client_name }}
             </p>
             
             <!-- Date d'échéance -->
