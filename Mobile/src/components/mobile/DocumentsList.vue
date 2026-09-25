@@ -71,23 +71,15 @@ const fetchDocuments = async () => {
   }
 }
 
-const viewPdf = async (doc) => {
-  const path = doc.pdf_url
-  if (!path) {
-    alert('Aucun fichier PDF enregistré. Générez-le depuis la version Desktop.')
+const viewPdf = (doc) => {
+  const url = doc.pdf_url
+  if (!url) {
+    alert('Aucun lien PDF enregistré pour ce document.')
     return
   }
-
-  try {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path)
-    if (data?.publicUrl) {
-      window.open(data.publicUrl, '_blank')
-    } else {
-      alert('Impossible de récupérer l’URL du document.')
-    }
-  } catch (err) {
-    console.error("Erreur ouverture PDF:", err)
-  }
+  
+  console.log("Tentative d'ouverture de l'URL :", url)
+  window.open(url, '_blank')
 }
 
 onMounted(fetchDocuments)
