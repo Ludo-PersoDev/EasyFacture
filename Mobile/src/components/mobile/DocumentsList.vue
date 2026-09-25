@@ -26,7 +26,7 @@ const fetchDocuments = async () => {
     // 2. On récupère tous les clients pour pouvoir associer les noms par leur ID
     const { data: clientsData, error: clientsError } = await supabase
       .from('clients')
-      .select('id, nom, nom_societe, prenom')
+      .select('id, nom_societe')
       .eq('user_id', user.id)
 
     if (clientsError) throw clientsError
@@ -106,7 +106,7 @@ onMounted(fetchDocuments)
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
             <!-- Affichage du nom de la société ou du contact récupéré via le dictionnaire -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.client_info?.nom_societe || doc.client_info?.nom || doc.client_info?.prenom || 'Client inconnu' }}
+              {{ doc.client_info?.nom_societe || 'Client inconnu' }}
             </p>
             <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
