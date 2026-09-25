@@ -59,19 +59,20 @@ const formSite = ref({
   ville: ''
 })
 
-// --- TARIFS SPÉCIFIQUES ---
-const showModalTarifs = ref(false)
-const clientSelectionneTarifs = ref(null)
+// --- CATALOGUE PRESTATIONS ---
 const cataloguePrestations = ref([])
-const tarifsClient = ref({})
-
-// --- PRESTATIONS ---
+const showModalPresta = ref(false)
 const formPresta = ref({
   designation: '',
   unite: 'Heure',
   prix_ht: 0,
   taux_tva: 20.0
 })
+
+// --- TARIFS SPÉCIFIQUES ---
+const showModalTarifs = ref(false)
+const clientSelectionneTarifs = ref(null)
+const tarifsClient = ref({}) // map prestation_id -> { prix, actif }
 
 // Observer le type de client pour adapter les champs pro
 watch(() => formClient.value.est_particulier, (val) => {
@@ -102,6 +103,16 @@ const fetchClients = async () => {
     console.error('Erreur chargement clients:', err)
   } finally {
     loadingClients.value = false
+  }
+}
+
+const fetchCatalogue = async () => {
+  try {
+    const { data, error } = await supabase.from('prestations').select('*').order('designation')
+    if (error) throw error
+    cataloguePrestations.value = data || []
+  } catch (err) {
+    console.error('Erreur chargement catalogue:', err)
   }
 }
 
@@ -251,12 +262,21 @@ const ouvrirModalTarifs = async (client) => {
     const { data: tarifsData } = await supabase.from('client_tarifs').select('*').eq('client_id', client.id)
     const mapTarifs = {}
     if (tarifsData) {
-      tarifsData.forEach(t => { mapTarifs[t.prestation_id] = t.prix_specifique_ht })
+      tarifsData.forEach(t => {
+        mapTarifs[t.prestation_id] = {
+          prix: t.prix_specifique_ht,
+          actif: t.est_actif !== false
+        }
+      })
     }
     
     const initialMap = {}
     cataloguePrestations.value.forEach(p => {
-      initialMap[p.id] = mapTarifs[p.id] !== undefined ? mapTarifs[p.id] : p.prix_ht
+      if (mapTarifs[p.id]) {
+        initialMap[p.id] = { ...mapTarifs[p.id] }
+      } else {
+        initialMap[p.id] = { prix: p.prix_ht, actif: true }
+      }
     })
     tarifsClient.value = initialMap
     showModalTarifs.value = true
@@ -268,12 +288,15 @@ const ouvrirModalTarifs = async (client) => {
 const sauvegarderTarifs = async () => {
   try {
     for (const prestationId of Object.keys(tarifsClient.value)) {
-      const prix = parseFloat(tarifsClient.value[prestationId]) || 0
+      const item = tarifsClient.value[prestationId]
+      const prix = parseFloat(item.prix) || 0
+      const actif = !!item.actif
+
       await supabase.from('client_tarifs').upsert({
         client_id: clientSelectionneTarifs.value.id,
         prestation_id: parseInt(prestationId),
         prix_specifique_ht: prix,
-        est_actif: true
+        est_actif: actif
       }, { onConflict: 'client_id,prestation_id' })
     }
     showModalTarifs.value = false
@@ -284,6 +307,16 @@ const sauvegarderTarifs = async () => {
 }
 
 // Création de Prestation
+const ouvrirModalPrestation = () => {
+  formPresta.value = {
+    designation: '',
+    unite: 'Heure',
+    prix_ht: 0,
+    taux_tva: entrepriseExoneree.value ? 0.0 : 20.0
+  }
+  showModalPresta.value = true
+}
+
 const creerPrestation = async () => {
   if (!formPresta.value.designation.trim()) {
     alert('Veuillez saisir une désignation.')
@@ -299,13 +332,9 @@ const creerPrestation = async () => {
     const { error } = await supabase.from('prestations').insert([payload])
     if (error) throw error
 
+    showModalPresta.value = false
+    await fetchCatalogue()
     alert('Prestation ajoutée au catalogue avec succès !')
-    formPresta.value = {
-      designation: '',
-      unite: 'Heure',
-      prix_ht: 0,
-      taux_tva: entrepriseExoneree.value ? 0.0 : 20.0
-    }
   } catch (err) {
     alert('Erreur lors de la création : ' + err.message)
   }
@@ -314,6 +343,7 @@ const creerPrestation = async () => {
 onMounted(() => {
   fetchParametres()
   fetchClients()
+  fetchCatalogue()
 })
 </script>
 
@@ -331,7 +361,7 @@ onMounted(() => {
         @click="tab = 'prester'" 
         class="flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition border-b-2"
         :class="tab === 'prester' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'">
-        Créer une Prestation
+        Catalogue Prestations
       </button>
     </div>
 
@@ -380,47 +410,79 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ONGLET 2 : PRESTATIONS -->
-    <div v-if="tab === 'prester'" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-      <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-100 pb-2">Ajouter une prestation au catalogue</h2>
-
-      <div class="space-y-3">
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">Désignation *</label>
-          <input v-model="formPresta.designation" type="text" placeholder="Ex: Cours particulier..." class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">Unité</label>
-            <select v-model="formPresta.unite" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              <option value="Heure">Heure</option>
-              <option value="Jour">Jour</option>
-              <option value="Forfait">Forfait</option>
-              <option value="Km">Km</option>
-              <option value="Unité">Unité</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">Prix unitaire HT (€) *</label>
-            <input v-model.number="formPresta.prix_ht" type="number" step="0.01" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">Taux de TVA</label>
-          <select v-model.number="formPresta.taux_tva" :disabled="entrepriseExoneree" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-400">
-            <option :value="0.0">0 % (Exonéré)</option>
-            <option :value="5.5">5.5 %</option>
-            <option :value="10.0">10 %</option>
-            <option :value="20.0">20 % (Standard)</option>
-          </select>
-          <p v-if="entrepriseExoneree" class="text-[10px] text-amber-600 italic mt-1">Entreprise en franchise de TVA (bloquée à 0%).</p>
-        </div>
-
-        <button @click="creerPrestation" class="w-full py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-blue-700 transition uppercase tracking-wider mt-2">
-          Enregistrer la prestation
+    <!-- ONGLET 2 : CATALOGUE PRESTATIONS -->
+    <div v-if="tab === 'prester'" class="space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Catalogue des prestations</h2>
+        <button @click="ouvrirModalPrestation()" class="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-xl font-medium shadow-sm hover:bg-blue-700 transition">
+          + Créer une prestation
         </button>
+      </div>
+
+      <div v-if="cataloguePrestations.length === 0" class="bg-white p-6 rounded-xl border border-slate-200 text-center text-xs text-slate-500">
+        Aucune prestation enregistrée.
+      </div>
+      <div v-else class="space-y-3">
+        <div v-for="p in cataloguePrestations" :key="p.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+          <div>
+            <h3 class="text-xs font-bold text-slate-900">{{ p.designation }}</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Prix HT : <span class="font-semibold text-slate-700">{{ p.prix_ht }} €</span> / {{ p.unite }} (TVA : {{ p.taux_tva }}%)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODALE CRÉATION PRESTATION -->
+    <div v-if="showModalPresta" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4 shadow-xl my-auto">
+        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 class="text-sm font-bold text-slate-900">Ajouter une prestation</h3>
+          <button @click="showModalPresta = false" class="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">Désignation *</label>
+            <input v-model="formPresta.designation" type="text" placeholder="Ex: Cours particulier..." class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-1">Unité</label>
+              <select v-model="formPresta.unite" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="Heure">Heure</option>
+                <option value="Jour">Jour</option>
+                <option value="Forfait">Forfait</option>
+                <option value="Km">Km</option>
+                <option value="Unité">Unité</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-1">Prix unitaire HT (€) *</label>
+              <input v-model.number="formPresta.prix_ht" type="number" step="0.01" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">Taux de TVA</label>
+            <select v-model.number="formPresta.taux_tva" :disabled="entrepriseExoneree" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-400">
+              <option :value="0.0">0 % (Exonéré)</option>
+              <option :value="5.5">5.5 %</option>
+              <option :value="10.0">10 %</option>
+              <option :value="20.0">20 % (Standard)</option>
+            </select>
+            <p v-if="entrepriseExoneree" class="text-[10px] text-amber-600 italic mt-1">Entreprise en franchise de TVA (bloquée à 0%).</p>
+          </div>
+
+          <div class="flex gap-2 pt-2 border-t border-slate-100">
+            <button type="button" @click="showModalPresta = false" class="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition uppercase">
+              Annuler
+            </button>
+            <button type="button" @click="creerPrestation" class="flex-1 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-blue-700 transition uppercase">
+              Enregistrer
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -587,14 +649,20 @@ onMounted(() => {
         </div>
 
         <div class="space-y-3 max-h-60 overflow-y-auto pr-1">
-          <div v-for="p in cataloguePrestations" :key="p.id" class="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-            <div>
-              <p class="text-xs font-bold text-slate-800">{{ p.designation }}</p>
-              <p class="text-[10px] text-slate-400">Standard : {{ p.prix_ht }} €</p>
+          <div v-for="p in cataloguePrestations" :key="p.id" class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-2">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-xs font-bold text-slate-800">{{ p.designation }}</p>
+                <p class="text-[10px] text-slate-400">Standard : {{ p.prix_ht }} €</p>
+              </div>
+              <div class="flex items-center gap-1">
+                <input v-model.number="tarifsClient[p.id].prix" type="number" step="0.01" class="w-24 border border-slate-300 p-1.5 rounded-lg text-xs text-right outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                <span class="text-xs text-slate-500">€</span>
+              </div>
             </div>
-            <div class="flex items-center gap-1">
-              <input v-model.number="tarifsClient[p.id]" type="number" step="0.01" class="w-24 border border-slate-300 p-1.5 rounded-lg text-xs text-right outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
-              <span class="text-xs text-slate-500">€</span>
+            <div class="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+              <input type="checkbox" :id="'actif_'+p.id" v-model="tarifsClient[p.id].actif" class="w-3.5 h-3.5 text-blue-600 rounded border-slate-300" />
+              <label :for="'actif_'+p.id" class="text-[11px] text-slate-600">Activer cette prestation pour ce client</label>
             </div>
           </div>
         </div>
