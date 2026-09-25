@@ -71,15 +71,37 @@ const fetchDocuments = async () => {
   }
 }
 
-const viewPdf = (doc) => {
-  const url = doc.pdf_url
-  if (!url) {
-    alert('Aucun lien PDF enregistré pour ce document.')
+const viewPdf = async (doc) => {
+  // On récupère le chemin relatif du fichier (ex: a053cade.../factures/FAC-2026-0005.pdf)
+  // Si tu n'as que l'URL complète en base, on extrait la partie après /public/documents/
+  let path = doc.pdf_url
+  if (path && path.includes('/public/documents/')) {
+    path = path.split('/public/documents/')[1]
+  }
+
+  if (!path) {
+    alert('Aucun chemin de fichier valide trouvé.')
     return
   }
-  
-  console.log("Tentative d'ouverture de l'URL :", url)
-  window.open(url, '_blank')
+
+  try {
+    // On génère une URL signée valable 60 secondes
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .createSignedUrl(path, 60)
+
+    if (error) throw error
+
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank')
+    } else {
+      alert('Impossible de générer le lien sécurisé du PDF.')
+    }
+  } catch (err) {
+    console.error("Erreur génération URL signée:", err)
+    // Fallback : si l'URL signée échoue, on tente l'ouverture directe de l'URL brute
+    window.open(doc.pdf_url, '_blank')
+  }
 }
 
 onMounted(fetchDocuments)
