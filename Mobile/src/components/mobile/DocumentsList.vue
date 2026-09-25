@@ -11,16 +11,39 @@ const fetchDocuments = async () => {
   try {
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // Requête directe sans filtre restrictif pour tester l'affichage brut
-    const { data, error } = await supabase
+    // 1. On récupère d'abord les documents (cette partie fonctionne toute seule)
+    const { data: docsData, error: docsError } = await supabase
       .from(table)
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (error) throw error
-    documents.value = data || []
+    if (docsError) throw docsError
+
+    // 2. On essaie de récupérer les clients de manière sécurisée (si ça échoue, ça ne bloque pas les documents)
+    let clientsMap = {}
+    try {
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('id, nom, nom_societe, prenom')
+      
+      if (!clientsError && clientsData) {
+        clientsData.forEach(client => {
+          clientsMap[client.id] = client
+        })
+      }
+    } catch (e) {
+      console.warn("Impossible de charger la table clients, affichage des IDs par défaut", e)
+    }
+
+    // 3. On associe les deux
+    documents.value = (docsData || []).map(doc => ({
+      ...doc,
+      client_info: clientsMap[doc.client_id] || null
+    }))
+
   } catch (err) {
     console.error('Erreur chargement documents:', err)
+    documents.value = []
   } finally {
     loading.value = false
   }
@@ -29,7 +52,7 @@ const fetchDocuments = async () => {
 const viewPdf = async (doc) => {
   const path = doc.pdf_path || doc.fichier_pdf
   if (!path) {
-    alert('Aucun fichier PDF enregistré.')
+    alert('Aucun fichier PDF enregistré. Générez-le depuis la version Desktop.')
     return
   }
 
@@ -37,6 +60,8 @@ const viewPdf = async (doc) => {
     const { data } = supabase.storage.from('documents').getPublicUrl(path)
     if (data?.publicUrl) {
       window.open(data.publicUrl, '_blank')
+    } else {
+      alert('Impossible de récupérer l’URL du document.')
     }
   } catch (err) {
     console.error("Erreur ouverture PDF:", err)
@@ -75,14 +100,19 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-start">
           <div>
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
+            
+            <!-- Affichage du nom de la société ou du contact (ou ID si non trouvé) -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              Client ID : {{ doc.client_id }}
+              {{ doc.client_info?.nom_societe || doc.client_info?.nom || doc.client_info?.prenom || `Client ID: ${doc.client_id}` }}
             </p>
+            
+            <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
               Échéance : {{ doc.date_echeance }}
             </p>
           </div>
-          <span class="text-[10px] px-2 py-0.5 rounded-full border font-medium bg-amber-50 text-amber-700 border-amber-100">
+
+          <span :class="doc.statut === 'Payée' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'" class="text-[10px] px-2 py-0.5 rounded-full border font-medium">
             {{ doc.statut || 'En attente' }}
           </span>
         </div>
@@ -90,7 +120,7 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-center pt-2 border-t border-slate-100 mt-1">
           <span class="text-sm font-extrabold text-slate-900">{{ doc.montant_ttc || 0 }} €</span>
           <button @click="viewPdf(doc)" class="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">
-            Voir PDF
+            <span class="material-icons text-sm">visibility</span> Voir PDF
           </button>
         </div>
       </div>
