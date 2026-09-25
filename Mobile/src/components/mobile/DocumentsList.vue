@@ -14,11 +14,16 @@ const fetchDocuments = async () => {
 
     const table = activeTab.value === 'factures' ? 'factures' : 'devis'
     
-    // Requête avec jointure explicite sur client_id
+    // Correction de la syntaxe de jointure Supabase avec le point d'exclamation (!)
     const { data, error } = await supabase
       .from(table)
       .select(`
-        *
+        *,
+        clients!client_id (
+          nom,
+          nom_societe,
+          prenom
+        )
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
@@ -84,9 +89,9 @@ onMounted(fetchDocuments)
         <div class="flex justify-between items-start">
           <div>
             <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
-            <!-- Affichage du nom de la société ou du client récupéré via la table clients -->
+            <!-- Affichage du nom de la société ou du contact principal -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
-              {{ doc.clients?.nom_societe || doc.clients?.contact || doc.clients?.prenom || 'Client inconnu' }}
+              {{ doc.clients?.nom_societe || doc.clients?.nom || doc.clients?.prenom || 'Client inconnu' }}
             </p>
             <!-- Date d'échéance -->
             <p class="text-[10px] text-slate-400 mt-0.5" v-if="doc.date_echeance">
