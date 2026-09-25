@@ -17,7 +17,7 @@ const fetchDashboardData = async () => {
 
     const { data, error } = await supabase
       .from('factures')
-      .select('montant_ttc, statut, date_emission, date_echeance, facturx_statut')
+      .select('total_ttc, statut, date_creation, date_echeance, Envoi_facturx')
       .eq('user_id', user.id)
 
     if (error) throw error
@@ -32,8 +32,8 @@ const fetchDashboardData = async () => {
 // Filtrage des factures selon l'année et le mois sélectionnés
 const filteredFactures = computed(() => {
   return factures.value.filter(f => {
-    if (!f.date_emission) return false
-    const date = new Date(f.date_emission)
+    if (!f.date_creation) return false
+    const date = new Date(f.date_creation)
     const yearMatch = date.getFullYear().toString() === selectedYear.value
     const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
     return yearMatch && monthMatch
@@ -41,18 +41,18 @@ const filteredFactures = computed(() => {
 })
 
 // Calculs dynamiques basés sur les filtres
-const totalCa = computed(() => filteredFactures.value.reduce((acc, f) => acc + (f.montant_ttc || 0), 0))
+const totalCa = computed(() => filteredFactures.value.reduce((acc, f) => acc + (f.total_ttc || 0), 0))
 
 const totalEncaisse = computed(() => {
   return filteredFactures.value
     .filter(f => f.statut === 'Payée')
-    .reduce((acc, f) => acc + (f.montant_ttc || 0), 0)
+    .reduce((acc, f) => acc + (f.total_ttc || 0), 0)
 })
 
 const totalEnAttente = computed(() => {
   return filteredFactures.value
     .filter(f => f.statut !== 'Payée')
-    .reduce((acc, f) => acc + (f.montant_ttc || 0), 0)
+    .reduce((acc, f) => acc + (f.total_ttc || 0), 0)
 })
 
 const retardsList = computed(() => {
@@ -63,7 +63,7 @@ const retardsList = computed(() => {
   })
 })
 
-const totalRetardMontant = computed(() => retardsList.value.reduce((acc, f) => acc + (f.montant_ttc || 0), 0))
+const totalRetardMontant = computed(() => retardsList.value.reduce((acc, f) => acc + (f.total_ttc || 0), 0))
 const totalRetardCount = computed(() => retardsList.value.length)
 
 onMounted(() => {
