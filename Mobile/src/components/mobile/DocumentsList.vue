@@ -18,48 +18,48 @@ const fetchDocuments = async () => {
 
     if (docsError) throw docsError
 
-    // DEBUG : Affichons un document dans la console pour voir ses clés exactes (client_id, nom_client, etc.)
-    if (docsData && docsData.length > 0) {
-      console.log("Structure d'un document brut :", docsData[0])
-    }
-
     // 2. Récupération des clients
     let clientsMap = {}
     try {
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
-        .select('*') // On prend tout pour voir les colonnes disponibles
+        .select('*')
       
-      if (clientsError) {
-        console.warn("Erreur chargement table clients :", clientsError.message)
-      } else if (clientsData) {
-        console.log("Clients chargés avec succès :", clientsData)
+      if (!clientsError && clientsData) {
         clientsData.forEach(client => {
-          // On indexe par l'id (peu importe le type de clé primaire)
-          clientsMap[client.id] = client
-          if (client.uuid) clientsMap[client.uuid] = client
+          // On enregistre sous toutes les formes possibles d'ID (string, number) pour être blindé
+          if (client.id !== undefined) {
+            clientsMap[client.id] = client
+            clientsMap[String(client.id)] = client
+          }
+          if (client.uuid !== undefined) {
+            clientsMap[client.uuid] = client
+            clientsMap[String(client.uuid)] = client
+          }
         })
       }
     } catch (e) {
       console.warn("Exception clients :", e)
     }
 
-    // 3. Association avec tolérance maximale sur les noms de colonnes
+    // 3. Association des noms
     documents.value = (docsData || []).map(doc => {
-      // Si le nom est déjà présent directement dans la facture
+      // Gestion des différents noms possibles pour le numéro et le client
+      const numeroDoc = doc.numero_facture || doc.numero_devis || doc.numero || 'Brouillon'
+      
       const directName = doc.nom_client || doc.client_nom || doc.client_name || doc.nom
-
-      // Sinon on cherche via la map du client_id
-      const clientObj = clientsMap[doc.client_id] || clientsMap[doc.client_uuid] || null
+      
+      const clientObj = clientsMap[doc.client_id] || clientsMap[String(doc.client_id)] || null
       
       const resolvedName = directName || 
                            clientObj?.nom_societe || 
                            clientObj?.nom || 
                            clientObj?.prenom || 
-                           (doc.client_id ? `ID: ${doc.client_id}` : 'Client non spécifié')
+                           (doc.client_id ? `Client ID: ${doc.client_id}` : 'Client non spécifié')
 
       return {
         ...doc,
+        numero_ffiche: numeroDoc,
         resolved_client_name: resolvedName
       }
     })
@@ -121,7 +121,8 @@ onMounted(fetchDocuments)
       <div v-for="doc in documents" :key="doc.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
         <div class="flex justify-between items-start">
           <div>
-            <span class="text-xs font-bold text-slate-900">{{ doc.numero || 'Brouillon' }}</span>
+            <!-- Utilisation du numéro correct (numero_facture / numero_devis) -->
+            <span class="text-xs font-bold text-slate-900">{{ doc.numero_ffiche }}</span>
             
             <!-- Nom du client résolu -->
             <p class="text-xs font-medium text-slate-600 mt-0.5">
