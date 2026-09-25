@@ -124,7 +124,7 @@ onMounted(() => {
 
       <!-- 3. En attente -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">En attente</span>
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">En attente Paiement</span>
         <div class="text-base font-extrabold text-amber-600 mt-2">
           {{ loading ? '...' : totalEnAttente.toFixed(2) }} €
         </div>
@@ -133,7 +133,7 @@ onMounted(() => {
       <!-- 4. Paiements en retard -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <div class="flex justify-between items-center">
-          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">En retard</span>
+          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">En retard Paiement</span>
           <span v-if="!loading && totalRetardCount > 0" class="text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded-full border border-red-100">
             {{ totalRetardCount }}
           </span>
