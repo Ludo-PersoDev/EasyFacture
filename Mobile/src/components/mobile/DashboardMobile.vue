@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../../supabase'
 
 const factures = ref([])
+const interventions = ref([])
 const loading = ref(true)
 
 // Filtres temporels (Année en cours par défaut, mois par défaut "tous")
@@ -15,13 +16,23 @@ const fetchDashboardData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data, error } = await supabase
+    // 1. Récupération des factures
+    const { data: factData, error: factError } = await supabase
       .from('factures')
       .select('total_ttc, statut, date_creation, date_echeance, Envoi_facturx')
       .eq('user_id', user.id)
 
-    if (error) throw error
-    factures.value = data || []
+    if (factError) throw factError
+    factures.value = factData || []
+
+    // 2. Récupération des interventions pour le "Reste à facturer"
+    const { data: interData, error: interError } = await supabase
+      .from('interventions')
+      .select('date, prix_final_ht, quantite, facture_id')
+
+    if (interError) throw interError
+    interventions.value = interData || []
+
   } catch (err) {
     console.error("Erreur chargement dashboard :", err)
   } finally {
@@ -34,6 +45,17 @@ const filteredFactures = computed(() => {
   return factures.value.filter(f => {
     if (!f.date_creation) return false
     const date = new Date(f.date_creation)
+    const yearMatch = date.getFullYear().toString() === selectedYear.value
+    const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
+    return yearMatch && monthMatch
+  })
+})
+
+// Filtrage des interventions selon l'année et le mois sélectionnés
+const filteredInterventions = computed(() => {
+  return interventions.value.filter(i => {
+    if (!i.date) return false
+    const date = new Date(i.date)
     const yearMatch = date.getFullYear().toString() === selectedYear.value
     const monthMatch = selectedMonth.value === 'all' || (date.getMonth() + 1).toString().padStart(2, '0') === selectedMonth.value
     return yearMatch && monthMatch
@@ -65,6 +87,13 @@ const retardsList = computed(() => {
 
 const totalRetardMontant = computed(() => retardsList.value.reduce((acc, f) => acc + (f.total_ttc || 0), 0))
 const totalRetardCount = computed(() => retardsList.value.length)
+
+// Calcul du reste à facturer (interventions sans facture_id rattaché)
+const totalResteAFacturer = computed(() => {
+  return filteredInterventions.value
+    .filter(i => !i.facture_id)
+    .reduce((acc, i) => acc + ((i.prix_final_ht || 0) * (i.quantite || 1)), 0)
+})
 
 onMounted(() => {
   fetchDashboardData()
@@ -104,7 +133,7 @@ onMounted(() => {
       </select>
     </div>
 
-    <!-- Grille de 4 cartes (Pleine largeur) -->
+    <!-- Grille des cartes de pilotage -->
     <div class="grid grid-cols-2 gap-3">
       <!-- 1. CA Total Facturé -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
@@ -140,6 +169,14 @@ onMounted(() => {
         </div>
         <div class="text-base font-extrabold text-red-600 mt-2">
           {{ loading ? '...' : totalRetardMontant.toFixed(2) }} €
+        </div>
+      </div>
+
+      <!-- 5. Reste à Facturer (Pleine largeur) -->
+      <div class="col-span-2 bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Reste à Facturer (Prestations non liées)</span>
+        <div class="text-base font-extrabold text-indigo-600 mt-2">
+          {{ loading ? '...' : totalResteAFacturer.toFixed(2) }} € HT
         </div>
       </div>
     </div>
