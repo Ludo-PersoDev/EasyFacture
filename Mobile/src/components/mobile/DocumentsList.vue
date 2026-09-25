@@ -18,11 +18,7 @@ const fetchDocuments = async () => {
     const { data, error } = await supabase
       .from(table)
       .select(`
-        *,
-        clients:client_id (
-          nom_societe,
-          contact
-        )
+        *
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
