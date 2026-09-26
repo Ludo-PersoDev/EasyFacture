@@ -67,10 +67,10 @@ const fetchDashboardData = async () => {
     // Récupération du prénom depuis les métadonnées de l'utilisateur Supabase
     userName.value = user.user_metadata?.prenom || user.user_metadata?.full_name || 'Utilisateur'
 
-    // 1. Récupération des factures (avec le statut d'export platform)
+    // 1. Récupération des factures (avec uniquement les colonnes existantes)
     const { data: factData, error: factError } = await supabase
       .from('factures')
-      .select('total_ttc, statut, date_creation, date_echeance, Envoi_facturx, statut_export_platform')
+      .select('total_ttc, statut, date_creation, date_echeance, statut_export_platform')
       .eq('user_id', user.id)
 
     if (factError) throw factError
@@ -160,10 +160,10 @@ const facturxStats = computed(() => {
   const all = factures.value
   return {
     total: all.length,
-    nonConcerne: all.filter(f => f.statut_export_platform === 'Non Concerné').length,
-    expedie: all.filter(f => f.statut_export_platform === 'Expédié').length,
-    aTransmettre: all.filter(f => f.statut_export_platform === 'À Transmettre').length,
-    erreur: all.filter(f => f.statut_export_platform === 'Erreur').length
+    nonConcerne: all.filter(f => f.statut_export_platform === 'non concerné').length,
+    expedie: all.filter(f => f.statut_export_platform === 'expédié').length,
+    aTransmettre: all.filter(f => f.statut_export_platform === 'à transmettre').length,
+    erreur: all.filter(f => f.statut_export_platform === 'erreur').length
   }
 })
 
