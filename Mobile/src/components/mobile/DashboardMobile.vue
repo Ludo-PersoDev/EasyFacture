@@ -70,7 +70,7 @@ const fetchDashboardData = async () => {
     // 1. Récupération des factures (avec uniquement les colonnes existantes)
     const { data: factData, error: factError } = await supabase
       .from('factures')
-      .select('total_ttc, statut, date_creation, date_echeance, statut_export_platform')
+      .select('total_ttc, statut, date_creation, date_echeance, statut_export_plateforme')
       .eq('user_id', user.id)
 
     if (factError) throw factError
@@ -160,10 +160,10 @@ const facturxStats = computed(() => {
   const all = factures.value
   return {
     total: all.length,
-    nonConcerne: all.filter(f => f.statut_export_platform === 'non concerné').length,
-    expedie: all.filter(f => f.statut_export_platform === 'expédié').length,
-    aTransmettre: all.filter(f => f.statut_export_platform === 'à transmettre').length,
-    erreur: all.filter(f => f.statut_export_platform === 'erreur').length
+    nonConcerne: all.filter(f => f.statut_export_plateforme === 'non concerné').length,
+    expedie: all.filter(f => f.statut_export_plateforme === 'expédié').length,
+    aTransmettre: all.filter(f => f.statut_export_plateforme === 'à transmettre').length,
+    erreur: all.filter(f => f.statut_export_plateforme === 'erreur').length
   }
 })
 
