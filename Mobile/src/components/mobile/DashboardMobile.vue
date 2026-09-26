@@ -160,10 +160,10 @@ const facturxStats = computed(() => {
   const all = factures.value
   return {
     total: all.length,
-    nonConcerne: all.filter(f => f.statut_export_plateforme === 'non concerné').length,
-    expedie: all.filter(f => f.statut_export_plateforme === 'expédié').length,
-    aTransmettre: all.filter(f => f.statut_export_plateforme === 'à transmettre').length,
-    erreur: all.filter(f => f.statut_export_plateforme === 'erreur').length
+    nonConcerne: all.filter(f => f.statut_export_plateforme === 'Non Concerné').length,
+    expedie: all.filter(f => f.statut_export_plateforme === 'Expédié').length,
+    aTransmettre: all.filter(f => f.statut_export_plateforme === 'À Transmettre').length,
+    erreur: all.filter(f => f.statut_export_plateforme === 'Erreur').length
   }
 })
 
