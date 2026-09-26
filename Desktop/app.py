@@ -128,7 +128,6 @@ def sync_pending_factures(supabase_client: Client, user_id: str, bucket_name: st
                     continue
                     
                 file_name = f"{inv_number}.pdf"
-                # Arborescence demandée : documents/{user_id}/factures/{nomdoc}
                 storage_path = f"{user_id}/factures/{file_name}"
                 
                 with open(pdf_path, "rb") as f:
@@ -182,7 +181,6 @@ def sync_pending_devis(supabase_client: Client, user_id: str, bucket_name: str =
                     continue
                     
                 file_name = f"{dev_number}.pdf"
-                # Arborescence demandée : documents/{user_id}/devis/{nomdoc}
                 storage_path = f"{user_id}/devis/{file_name}"
                 
                 with open(pdf_path, "rb") as f:
@@ -211,8 +209,56 @@ def sync_pending_devis(supabase_client: Client, user_id: str, bucket_name: str =
         print(f"❌ [Sync Error general devis] {e}", flush=True)
 
 
-# --- GESTION DE LA SESSION UTILISATEUR ---
+# --- GESTION DE LA SESSION UTILISATEUR ET DU PROFIL ---
 current_user = None
+
+def get_user_prenom():
+    if current_user and hasattr(current_user, "user_metadata") and current_user.user_metadata:
+        return current_user.user_metadata.get("prenom", "Utilisateur")
+    return "Utilisateur"
+
+def ouvrir_modal_profil():
+    with ui.dialog() as dialog, ui.card().classes("p-6 w-96 gap-4"):
+        ui.label("Mon Profil").classes("text-xl font-bold text-slate-800")
+        
+        # Email en lecture seule
+        ui.input("Email", value=current_user.email if current_user else "").classes("w-full").props("readonly outlined")
+        
+        # Champ prénom modifiable (récupéré depuis le user_metadata)
+        prenom_actuel = current_user.user_metadata.get("prenom", "") if current_user and current_user.user_metadata else ""
+        prenom_input = ui.input("Mon prénom", value=prenom_actuel).classes("w-full").props("outlined")
+        
+        # Champ mot de passe (laissé vide si pas de changement)
+        password_input = ui.input("Nouveau mot de passe (laisser vide si inchangé)", password=True, password_toggle_button=True).classes("w-full").props("outlined")
+        
+        def sauvegarder_profil():
+            nouveau_prenom = prenom_input.value
+            nouveau_mdp = password_input.value
+            try:
+                update_attrs = {"data": {"prenom": nouveau_prenom}}
+                if nouveau_mdp.strip():
+                    update_attrs["password"] = nouveau_mdp
+                
+                res = supabase.auth.update_user(update_attrs)
+                if res.user:
+                    global current_user
+                    current_user = res.user
+                
+                if nouveau_mdp.strip():
+                    ui.notify("Prénom et mot de passe mis à jour avec succès !", type="positive")
+                else:
+                    ui.notify("Profil mis à jour avec succès !", type="positive")
+                
+                dialog.close()
+                content_area.refresh()
+            except Exception as e:
+                ui.notify(f"Erreur lors de la sauvegarde : {e}", type="negative")
+
+        with ui.row().classes("w-full justify-end gap-2 mt-4"):
+            ui.button("Annuler", on_click=dialog.close).props("flat")
+            ui.button("Enregistrer", on_click=sauvegarder_profil).props("color=primary")
+            
+    dialog.open()
 
 def charger_session_enregistree():
     global current_user
@@ -230,7 +276,6 @@ def charger_session_enregistree():
                         current_user = res.user
                         database.init_database_supabase(supabase, current_user.id)
                         
-                        # Lancement de la synchro avec le user_id de l'utilisateur connecté
                         threading.Thread(target=lambda: sync_local_logo(supabase, current_user.id), daemon=True).start()
                         threading.Thread(target=lambda: sync_pending_factures(supabase, current_user.id), daemon=True).start()
                         threading.Thread(target=lambda: sync_pending_devis(supabase, current_user.id), daemon=True).start()
@@ -324,9 +369,11 @@ def set_page(page_name: str):
 
 def render_odoo_home():
     niveau = database.verifier_progression_onboarding()
+    prenom_utilisateur = get_user_prenom()
     
     with ui.column().classes("w-full items-center justify-center py-6 gap-8"):
         with ui.column().classes("items-center gap-2 text-center max-w-xl"):
+            ui.label(f"Bonjour {prenom_utilisateur} !").classes("text-2xl font-semibold text-slate-700")
             ui.label("Bienvenue sur EasyFacture").classes("text-3xl font-extrabold text-slate-800")
             
             if niveau == 1:
@@ -428,7 +475,8 @@ def main_page(access_token: str = None, refresh_token: str = None, type: str = N
             ui.label("EasyFacture").classes("font-bold text-lg text-slate-800")
         
         with ui.row().classes("items-center gap-2"):
-            ui.label(f"Connecté ({current_user.email if current_user else ''})").classes("text-xs text-slate-500 mr-2")
+            ui.button("Mon profil", icon="account_circle", on_click=ouvrir_modal_profil).props("flat color=slate-700").classes("mr-2")
+            
             b = ui.button(on_click=lancer_assistance_technique).props("flat color=primary")
             with b:
                 ui.image('assets/support_icon.png').classes('w-10 h-10 mr-2')
@@ -504,9 +552,8 @@ def render_login_screen():
                                 current_user = res.user
                                 database.init_database_supabase(supabase, current_user.id)
                                 
-                                # Lancement asynchrone des synchronisations avec l'ID utilisateur
                                 threading.Thread(target=lambda: sync_local_logo(supabase, current_user.id), daemon=True).start()
-                                threading.Thread(target=lambda: sync_pending_invoices(supabase, current_user.id), daemon=True).start()
+                                threading.Thread(target=lambda: sync_pending_factures(supabase, current_user.id), daemon=True).start()
                                 
                                 ui.navigate.to("/")
                             else:

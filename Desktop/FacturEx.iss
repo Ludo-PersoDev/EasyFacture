@@ -2,7 +2,7 @@
 ; -------------------------------------------------------------------------------
 
 #define MyAppName "EasyFacture"
-#define MyAppVersion "2.0.5"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "LuA"
 #define MyAppMainScript "launcher.pyw"
 

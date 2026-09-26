@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from nicegui import ui
 import database
 
@@ -51,19 +51,22 @@ def render_analytics():
                 ui.label("Période d'analyse")
 
             with ui.row().classes("items-center gap-4"):
-                filtre_annee = ui.select(options=options_annees, value=annee_courante, label="Année").classes("w-40").props("dense outlined")
-                filtre_mois = ui.select(options=options_mois, value="Tous", label="Mois").classes("w-44").props("dense outlined")
+                filtre_annee = ui.select(options=options_annees, value=annee_courante, label="Année").classes("w-36").props("dense outlined")
+                filtre_mois = ui.select(options=options_mois, value="Tous", label="Mois").classes("w-36").props("dense outlined")
+                filtre_semaine = ui.select(options={'Toutes': 'Toutes les semaines'}, value="Toutes", label="Semaine").classes("w-48").props("dense outlined")
                 
                 def reinitialiser_filtres():
                     filtre_annee.value = annee_courante
                     filtre_mois.value = "Tous"
+                    mettre_a_jour_semaines()
+                    filtre_semaine.value = "Toutes"
                 
                 ui.button(icon="refresh", on_click=reinitialiser_filtres).props("flat round dense color=slate")
 
     # --- 3. STRUCTURE FIXE DES BLOCS DE L'INTERFACE ---
     
-    # BLOC 1 : KPIs
-    with ui.row().classes("w-full grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"):
+    # BLOC 1 : KPIs (5 tuiles)
+    with ui.row().classes("w-full grid grid-cols-1 md:grid-cols-5 gap-4 mb-6"):
         with ui.card().classes("p-4 bg-white border border-slate-200 rounded-xl space-y-1 shadow-sm"):
             ui.label("CA Facturé Total HT").classes("text-xs font-bold text-slate-500 uppercase tracking-wider")
             lbl_kpi_ca = ui.label("0.00 €").classes("text-2xl font-black text-slate-800")
@@ -85,9 +88,13 @@ def render_analytics():
             lbl_kpi_attente = ui.label("0.00 €").classes("text-2xl font-black text-blue-900")
             ui.label("Non échues sur la période").classes("text-xs text-blue-600")
 
+        with ui.card().classes("p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1 shadow-sm"):
+            ui.label("Pas encore facturé").classes("text-xs font-bold text-amber-700 uppercase tracking-wider")
+            lbl_kpi_non_facture = ui.label("0.00 €").classes("text-2xl font-black text-amber-900")
+            ui.label("Interventions en attente").classes("text-xs text-amber-600")
+
     # BLOC 2 : GRAPHIQUES (LIGNE CA + CAMEMBERT MODES DE RÈGLEMENT)
     with ui.row().classes("w-full grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"):
-        # Graphique d'Évolution (2/3 de la largeur)
         with ui.card().classes("lg:col-span-2 p-6 bg-white border border-slate-200 rounded-xl space-y-4 shadow-sm"):
             with ui.row().classes("w-full justify-between items-center border-b pb-3"):
                 with ui.row().classes("items-center gap-2"):
@@ -98,7 +105,6 @@ def render_analytics():
                 
             chart_ca = ui.echart({}).classes("w-full h-80")
 
-        # Graphique Répartition Règlements (1/3 de la largeur)
         with ui.card().classes("p-6 bg-white border border-slate-200 rounded-xl space-y-4 shadow-sm"):
             with ui.row().classes("items-center gap-2 border-b pb-3"):
                 ui.icon("pie_chart", color="secondary", size="24px")
@@ -163,18 +169,86 @@ def render_analytics():
             </q-td>
         ''')
 
-    # --- 4. LOGIQUE DE CALCUL ET REFRESH ---
-    def rafraichir_dashboard():
+    # --- 4. GESTION DES SEMAINES SELON LE MOIS ---
+    def mettre_a_jour_semaines():
+        mois_val = filtre_mois.value
+        annee_val = filtre_annee.value
+
+        options_semaines = {'Toutes': 'Toutes les semaines'}
+        
+        if mois_val != 'Tous' and annee_val != 'Toutes':
+            y = int(annee_val)
+            m = int(mois_val)
+            
+            debut_mois = datetime(y, m, 1).date()
+            if m == 12:
+                fin_mois = datetime(y + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                fin_mois = datetime(y, m + 1, 1).date() - timedelta(days=1)
+
+            courant = debut_mois
+            sem_idx = 1
+            while courant <= fin_mois:
+                jours_jusqu_dimanche = 6 - courant.weekday()
+                fin_semaine = courant + timedelta(days=jours_jusqu_dimanche)
+                if fin_semaine > fin_mois:
+                    fin_semaine = fin_mois
+
+                key_sem = f"S{sem_idx}:{courant.strftime('%Y-%m-%d')}:{fin_semaine.strftime('%Y-%m-%d')}"
+                label_sem = f"Semaine {sem_idx} ({courant.strftime('%d/%m')} au {fin_semaine.strftime('%d/%m')})"
+                options_semaines[key_sem] = label_sem
+
+                courant = fin_semaine + timedelta(days=1)
+                sem_idx += 1
+
+        filtre_semaine.options = options_semaines
+        if filtre_semaine.value not in options_semaines:
+            filtre_semaine.value = 'Toutes'
+        
+        # Indispensable pour forcer le rafraîchissement du composant visuel :
+        filtre_semaine.update()
+
+    def date_dans_periode(d):
+        """Vérifie si une date correspond aux filtres Année, Mois et Semaine."""
+        if not d:
+            return False
         selected_annee = filtre_annee.value
         selected_mois = filtre_mois.value
+        selected_semaine = filtre_semaine.value
 
+        if selected_annee != 'Toutes' and str(d.year) != str(selected_annee):
+            return False
+        if selected_mois != 'Tous' and f"{d.month:02d}" != str(selected_mois):
+            return False
+        
+        if selected_semaine and selected_semaine != 'Toutes':
+            try:
+                parts = selected_semaine.split(':')
+                if len(parts) == 3:
+                    _, d_debut_str, d_fin_str = parts
+                    d_debut = datetime.strptime(d_debut_str, '%Y-%m-%d').date()
+                    d_fin = datetime.strptime(d_fin_str, '%Y-%m-%d').date()
+                    if not (d_debut <= d <= d_fin):
+                        return False
+            except Exception:
+                pass
+
+        return True
+
+    # --- 5. LOGIQUE DE CALCUL ET REFRESH ---
+    def rafraichir_dashboard():
         sup = database.get_conn()
-        res = sup.table("factures").select(
+        
+        # Récupération factures
+        res_factures = sup.table("factures").select(
             "*, clients(nom_societe, contact, telephone, email)"
         ).neq("statut", "Annulée").execute()
 
+        # Récupération interventions
+        res_interventions = sup.table("interventions").select("*").execute()
+
         all_factures = []
-        for row in res.data:
+        for row in res_factures.data:
             c = row.get("clients") or {}
             f_dict = {**row}
             f_dict['nom_societe'] = c.get('nom_societe')
@@ -183,29 +257,31 @@ def render_analytics():
             f_dict['email'] = c.get('email')
             all_factures.append(f_dict)
 
+        all_interventions = res_interventions.data or []
+
         aujourdhui = datetime.now().date()
-        total_ca_ht, total_encaisse_ttc, total_retard_ttc, total_attente_ttc = 0.0, 0.0, 0.0, 0.0
+        total_ca_ht, total_encaisse_ttc, total_retard_ttc, total_attente_ttc, total_non_facture = 0.0, 0.0, 0.0, 0.0, 0.0
         nb_retards = 0
         factures_en_retard = []
         clients_stats = {}
-        modes_stats = {}  # Pour le camembert
+        modes_stats = {}
 
+        # 1. Calcul du montant "Pas encore facturé" : interventions au statut "En attente" via prix_final_ht * quantite
+        for inter in all_interventions:
+            statut_inter = str(inter.get('statut') or '').strip().lower()
+            
+            if statut_inter in ['en attente', 'en_attente']:
+                d_inter = parse_date(inter.get('date_intervention') or inter.get('date') or inter.get('date_creation'))
+                if d_inter and date_dans_periode(d_inter):
+                    prix_ht = float(inter.get('prix_final_ht') or inter.get('montant_ht') or 0.0)
+                    quantite = float(inter.get('quantite') or 1.0)
+                    total_non_facture += (prix_ht * quantite)
+
+        # 2. Étape globale : Détection de TOUTES les factures en retard
         for f in all_factures:
-            d_creation = parse_date(f.get('date_creation'))
-            if not d_creation:
-                continue
-
-            if selected_annee != 'Toutes' and str(d_creation.year) != str(selected_annee):
-                continue
-            if selected_mois != 'Tous' and f"{d_creation.month:02d}" != str(selected_mois):
-                continue
-
             statut = f.get('statut')
             ttc = f.get('total_ttc') or 0.0
-            ht = f.get('total_ht') or 0.0
             client_nom = f.get('nom_societe') or 'Client Inconnu'
-            
-            mode_regl = f.get('mode_reglement') or 'Non spécifié'
 
             if client_nom not in clients_stats:
                 clients_stats[client_nom] = {
@@ -215,20 +291,8 @@ def render_analytics():
                     'nb_factures': 0,
                     'modes': {}
                 }
-            clients_stats[client_nom]['nb_factures'] += 1
 
-            if statut in ['Émise', 'Payée']:
-                total_ca_ht += ht
-                clients_stats[client_nom]['ca_ht'] += ht
-
-            if statut == 'Payée':
-                total_encaisse_ttc += ttc
-                clients_stats[client_nom]['paye_ttc'] += ttc
-
-                modes_stats[mode_regl] = modes_stats.get(mode_regl, 0.0) + ttc
-                clients_stats[client_nom]['modes'][mode_regl] = clients_stats[client_nom]['modes'].get(mode_regl, 0.0) + ttc
-
-            elif statut == 'Émise':
+            if statut not in ['Payée', 'Annulée']:
                 date_ech = parse_date(f.get('date_echeance'))
                 if date_ech and date_ech < aujourdhui:
                     jours_retard = (aujourdhui - date_ech).days
@@ -237,7 +301,34 @@ def render_analytics():
                     nb_retards += 1
                     factures_en_retard.append(f)
                     clients_stats[client_nom]['retard_ttc'] += ttc
-                else:
+
+        # 3. Étape filtrée : Calculs du CA, des encaissements et des stats selon la période
+        for f in all_factures:
+            d_creation = parse_date(f.get('date_creation'))
+            if not date_dans_periode(d_creation):
+                continue
+
+            statut = f.get('statut')
+            ttc = f.get('total_ttc') or 0.0
+            ht = f.get('total_ht') or 0.0
+            client_nom = f.get('nom_societe') or 'Client Inconnu'
+            mode_regl = f.get('mode_reglement') or 'Non spécifié'
+
+            clients_stats[client_nom]['nb_factures'] += 1
+
+            if statut != 'Annulée':
+                total_ca_ht += ht
+                clients_stats[client_nom]['ca_ht'] += ht
+
+            if statut == 'Payée':
+                total_encaisse_ttc += ttc
+                clients_stats[client_nom]['paye_ttc'] += ttc
+                modes_stats[mode_regl] = modes_stats.get(mode_regl, 0.0) + ttc
+                clients_stats[client_nom]['modes'][mode_regl] = clients_stats[client_nom]['modes'].get(mode_regl, 0.0) + ttc
+
+            elif statut != 'Payée':
+                date_ech = parse_date(f.get('date_echeance'))
+                if not date_ech or date_ech >= aujourdhui:
                     total_attente_ttc += ttc
 
         # Mise à jour des KPIs
@@ -245,6 +336,7 @@ def render_analytics():
         lbl_kpi_encaisse.set_text(f"{total_encaisse_ttc:.2f} €")
         lbl_kpi_retard_val.set_text(f"{total_retard_ttc:.2f} €")
         lbl_kpi_attente.set_text(f"{total_attente_ttc:.2f} €")
+        lbl_kpi_non_facture.set_text(f"{total_non_facture:.2f} €")
 
         if nb_retards > 0:
             card_retard_kpi.classes(remove="bg-slate-50 border-slate-200", add="bg-rose-50 border-rose-200")
@@ -260,8 +352,9 @@ def render_analytics():
             lbl_kpi_retard_sub.set_text("0 facture en retard")
 
         # --- A. Graphique Courbe CA ---
+        selected_annee = filtre_annee.value
         labels_graph, ca_annee_sel, ca_annee_n1 = [], [], []
-        comparaison_active = (selected_annee != 'Toutes')
+        comparaison_active = (selected_annee != 'Toutes' and filtre_mois.value == 'Tous' and filtre_semaine.value == 'Toutes')
 
         if comparaison_active:
             annee_num = int(selected_annee)
@@ -282,7 +375,7 @@ def render_analytics():
             monthly_sums = {}
             for f in all_factures:
                 d = parse_date(f.get('date_creation'))
-                if d and f.get('statut') != 'Annulée':
+                if d and f.get('statut') != 'Annulée' and date_dans_periode(d):
                     key = f"{d.year}-{d.month:02d}"
                     monthly_sums[key] = monthly_sums.get(key, 0.0) + (f.get('total_ht') or 0.0)
             
@@ -380,28 +473,64 @@ def render_analytics():
         grid_clients.rows = rows_clients
         grid_clients.update()
 
-    # --- 5. ÉVÉNEMENTS ET MODALES ---
+    # --- 6. ÉVÉNEMENTS ET INTERACTIONS ---
+    def on_mois_changed():
+        mettre_a_jour_semaines()
+        rafraichir_dashboard()
+
+    filtre_annee.on_value_change(lambda: rafraichir_dashboard())
+    filtre_mois.on_value_change(on_mois_changed)
+    filtre_semaine.on_value_change(lambda: rafraichir_dashboard())
+
     def update_retard_actions():
         if grid_retard.selected:
             f_sel = grid_retard.selected[0]
             label_sel_retard.set_text(f"Facture {f_sel.get('numero_facture')} ({f_sel.get('nom_societe')}) - Total : {f_sel.get('total_ttc_txt')}")
             buttons_retard.clear()
             with buttons_retard:
-                ui.button("Marquer comme Payée", icon="check_circle", on_click=lambda: marquer_comme_payee(f_sel.get('id'))).props("color=positive dense")
+                ui.button("Marquer comme Payée", icon="check_circle", on_click=lambda: ouvrir_modal_paiement(f_sel.get('id'), f_sel)).props("color=positive dense")
                 ui.button("Coordonnées Client", icon="contact_phone", on_click=lambda: afficher_contact_client(f_sel)).props("outline color=slate dense")
             actions_bar_retard.set_visibility(True)
         else:
             actions_bar_retard.set_visibility(False)
 
     grid_retard.on('row-click', lambda e: grid_retard.selected.clear() or grid_retard.selected.append(e.args[1]) or update_retard_actions())
-    filtre_annee.on_value_change(lambda: rafraichir_dashboard())
-    filtre_mois.on_value_change(lambda: rafraichir_dashboard())
 
-    def marquer_comme_payee(facture_id):
+    def ouvrir_modal_paiement(facture_id, facture_info):
+        with ui.dialog() as dialog, ui.card().classes("p-6 space-y-4 max-w-sm w-full"):
+            ui.label("Enregistrer le paiement").classes("text-lg font-bold text-slate-800 border-b pb-2")
+            ui.label(f"Facture : {facture_info.get('numero_facture')}").classes("text-sm text-slate-600")
+            
+            select_mode = ui.select(
+                options={
+                    'Virement': 'Virement',
+                    'Carte bancaire': 'Carte bancaire',
+                    'Chèque': 'Chèque',
+                    'Espèces': 'Espèces',
+                    'Prélèvement': 'Prélèvement',
+                    'Autre': 'Autre'
+                },
+                value='Virement',
+                label="Mode de règlement"
+            ).classes("w-full").props("outlined dense")
+
+            with ui.row().classes("w-full justify-end gap-2 mt-4"):
+                ui.button("Annuler", on_click=dialog.close).props("flat color=slate")
+                ui.button("Confirmer", on_click=lambda: valider_paiement(facture_id, select_mode.value, dialog)).props("color=positive")
+        dialog.open()
+
+    def valider_paiement(facture_id, mode_reglement, dialog):
         date_jour = datetime.now().strftime("%Y-%m-%d")
         sup = database.get_conn()
-        sup.table("factures").update({"statut": "Payée", "date_paiement": date_jour}).eq("id", facture_id).execute()
+        sup.table("factures").update({
+            "statut": "Payée", 
+            "date_paiement": date_jour,
+            "mode_reglement": mode_reglement
+        }).eq("id", facture_id).execute()
+        dialog.close()
         ui.notify("Paiement enregistré avec succès !", type="positive")
+        actions_bar_retard.set_visibility(False)
+        grid_retard.selected.clear()
         rafraichir_dashboard()
 
     def afficher_contact_client(facture_info):
@@ -421,5 +550,5 @@ def render_analytics():
                 ui.button("Fermer", on_click=dialog.close).props("flat color=slate")
         dialog.open()
 
-    # Lancement du premier chargement
+    mettre_a_jour_semaines()
     rafraichir_dashboard()
