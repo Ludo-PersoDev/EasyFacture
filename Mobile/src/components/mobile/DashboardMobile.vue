@@ -67,10 +67,10 @@ const fetchDashboardData = async () => {
     // Récupération du prénom depuis les métadonnées de l'utilisateur Supabase
     userName.value = user.user_metadata?.prenom || user.user_metadata?.full_name || 'Utilisateur'
 
-    // 1. Récupération des factures
+    // 1. Récupération des factures (avec le statut d'export platform)
     const { data: factData, error: factError } = await supabase
       .from('factures')
-      .select('total_ttc, statut, date_creation, date_echeance, Envoi_facturx')
+      .select('total_ttc, statut, date_creation, date_echeance, Envoi_facturx, statut_export_platform')
       .eq('user_id', user.id)
 
     if (factError) throw factError
@@ -153,6 +153,18 @@ const totalResteAFacturer = computed(() => {
   return filteredInterventions.value
     .filter(i => !i.facture_id)
     .reduce((acc, i) => acc + ((i.prix_final_ht || 0) * (i.quantite || 1)), 0)
+})
+
+// Statistiques Factur-X basées sur l'ensemble des factures de l'utilisateur
+const facturxStats = computed(() => {
+  const all = factures.value
+  return {
+    total: all.length,
+    nonConcerne: all.filter(f => f.statut_export_platform === 'non concerné').length,
+    expedie: all.filter(f => f.statut_export_platform === 'expédié').length,
+    aTransmettre: all.filter(f => f.statut_export_platform === 'à transmettre').length,
+    erreur: all.filter(f => f.statut_export_platform === 'erreur').length
+  }
 })
 
 onMounted(() => {
@@ -265,13 +277,27 @@ onMounted(() => {
         <span class="text-[10px] font-medium px-2 py-0.5 bg-sky-50 text-sky-700 rounded-full border border-sky-100">Lecture seule</span>
       </div>
       
-      <div class="flex justify-between items-center text-xs py-2 border-t border-slate-100">
-        <span class="text-slate-600">Factures à transmettre :</span>
-        <span class="font-bold text-amber-600">3 en attente</span>
-      </div>
-      <div class="flex justify-between items-center text-xs py-2 border-t border-slate-100">
-        <span class="text-slate-600">Dernière transmission :</span>
-        <span class="font-medium text-slate-800">Hier, 18:42</span>
+      <div class="space-y-1.5 text-xs">
+        <div class="flex justify-between items-center py-1.5 border-t border-slate-100">
+          <span class="text-slate-600">Total factures globales :</span>
+          <span class="font-bold text-slate-800">{{ loading ? '...' : facturxStats.total }}</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-t border-slate-100">
+          <span class="text-slate-600">Non concernées :</span>
+          <span class="font-bold text-slate-500">{{ loading ? '...' : facturxStats.nonConcerne }}</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-t border-slate-100">
+          <span class="text-slate-600">Expédiées :</span>
+          <span class="font-bold text-emerald-600">{{ loading ? '...' : facturxStats.expedie }}</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-t border-slate-100">
+          <span class="text-slate-600">À transmettre :</span>
+          <span class="font-bold text-amber-600">{{ loading ? '...' : facturxStats.aTransmettre }}</span>
+        </div>
+        <div class="flex justify-between items-center py-1.5 border-t border-slate-100">
+          <span class="text-slate-600">En erreur :</span>
+          <span class="font-bold text-red-600">{{ loading ? '...' : facturxStats.erreur }}</span>
+        </div>
       </div>
     </div>
   </div>
