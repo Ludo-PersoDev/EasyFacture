@@ -7,13 +7,12 @@ const interventions = ref([])
 const loading = ref(true)
 const userName = ref('')
 
-// Filtres temporels (Année en cours par défaut, mois par défaut "all")
+// Filtres temporels
 const currentYear = new Date().getFullYear().toString()
 const selectedYear = ref(currentYear)
-const selectedMonth = ref('all') // 'all' ou '01', '02', etc.
-const selectedWeek = ref(null) // null ou { debut: Date, fin: Date }
+const selectedMonth = ref('all')
+const selectedWeek = ref(null)
 
-// Génération dynamique des semaines en fonction du mois et de l'année choisis
 const semainesDuMois = computed(() => {
   if (selectedMonth.value === 'all' || !selectedMonth.value) return []
 
@@ -32,10 +31,7 @@ const semainesDuMois = computed(() => {
     let joursRestantsAvantDimanche = 7 - jourSemaine
     
     finSemaine.setDate(finSemaine.getDate() + joursRestantsAvantDimanche)
-
-    if (finSemaine > dernierJour) {
-      finSemaine = new Date(dernierJour)
-    }
+    if (finSemaine > dernierJour) finSemaine = new Date(dernierJour)
 
     semaines.push({
       debut: new Date(debutCourant),
@@ -61,7 +57,6 @@ const fetchDashboardData = async () => {
 
     userName.value = user.user_metadata?.prenom || user.user_metadata?.full_name || 'Utilisateur'
 
-    // 1. Récupération des factures
     const { data: factData, error: factError } = await supabase
       .from('factures')
       .select('total_ttc, total_ht, statut, date_creation, date_echeance, mode_reglement')
@@ -70,7 +65,6 @@ const fetchDashboardData = async () => {
     if (factError) throw factError
     factures.value = factData || []
 
-    // 2. Récupération des interventions (avec prix_final_ht, quantite, date et facture_id)
     const { data: interData, error: interError } = await supabase
       .from('interventions')
       .select('date, prix_final_ht, quantite, facture_id')
@@ -103,28 +97,13 @@ const correspondAuxFiltres = (dateString) => {
   return true
 }
 
-const filteredFactures = computed(() => {
-  return factures.value.filter(f => correspondAuxFiltres(f.date_creation))
-})
-
-const filteredInterventions = computed(() => {
-  return interventions.value.filter(i => correspondAuxFiltres(i.date))
-})
+const filteredFactures = computed(() => factures.value.filter(f => correspondAuxFiltres(f.date_creation)))
+const filteredInterventions = computed(() => interventions.value.filter(i => correspondAuxFiltres(i.date)))
 
 // Indicateurs Financiers
 const totalCa = computed(() => filteredFactures.value.reduce((acc, f) => acc + (f.total_ttc || 0), 0))
-
-const totalEncaisse = computed(() => {
-  return filteredFactures.value
-    .filter(f => f.statut === 'Payée')
-    .reduce((acc, f) => acc + (f.total_ttc || 0), 0)
-})
-
-const totalEnAttente = computed(() => {
-  return filteredFactures.value
-    .filter(f => f.statut !== 'Payée')
-    .reduce((acc, f) => acc + (f.total_ttc || 0), 0)
-})
+const totalEncaisse = computed(() => filteredFactures.value.filter(f => f.statut === 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0))
+const totalEnAttente = computed(() => filteredFactures.value.filter(f => f.statut !== 'Payée').reduce((acc, f) => acc + (f.total_ttc || 0), 0))
 
 const retardsList = computed(() => {
   const aujourdHui = new Date()
@@ -133,7 +112,6 @@ const retardsList = computed(() => {
     return new Date(f.date_echeance) < aujourdHui
   })
 })
-
 const totalRetardMontant = computed(() => retardsList.value.reduce((acc, f) => acc + (f.total_ttc || 0), 0))
 const totalRetardCount = computed(() => retardsList.value.length)
 
@@ -150,9 +128,7 @@ const modesReglementStats = computed(() => {
   const stats = {}
   filteredFactures.value.forEach(f => {
     const mode = f.mode_reglement || 'Non spécifié'
-    if (!stats[mode]) {
-      stats[mode] = { count: 0, montant: 0 }
-    }
+    if (!stats[mode]) stats[mode] = { count: 0, montant: 0 }
     stats[mode].count += 1
     stats[mode].montant += (f.total_ttc || 0)
   })
@@ -166,71 +142,73 @@ const modesReglementStats = computed(() => {
   })).sort((a, b) => b.montant - a.montant)
 })
 
-// 2. Comparatif Année en cours vs Année N-1 (Facturé + Non facturé par mois)
-const comparatifAnnuels = computed(() => {
+// 2. Graphique en colonnes verticales par mois (Payé, En attente, Non facturé)
+const graphiqueColonnesMois = computed(() => {
   const anneeCourante = parseInt(selectedYear.value)
   const anneePrecedente = anneeCourante - 1
-
   const moisNoms = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
   
-  const dataMois = moisNoms.map((nom, index) => {
-    return { 
-      mois: nom, 
-      indexMois: index, 
-      caCourantFacture: 0, 
-      caCourantNonFacture: 0, 
-      caPrecedentFacture: 0, 
-      caPrecedentNonFacture: 0 
-    }
-  })
+  const dataMois = moisNoms.map((nom, index) => ({
+    mois: nom,
+    courantPaye: 0,
+    courantAttente: 0,
+    courantNonFacture: 0,
+    precedentPaye: 0,
+    precedentAttente: 0,
+    precedentNonFacture: 0
+  }))
 
-  // Répartition des factures
   factures.value.forEach(f => {
     if (!f.date_creation) return
     const d = new Date(f.date_creation)
     const y = d.getFullYear()
     const m = d.getMonth()
+    const montant = f.total_ttc || 0
 
     if (y === anneeCourante) {
-      dataMois[m].caCourantFacture += (f.total_ttc || 0)
+      if (f.statut === 'Payée') dataMois[m].courantPaye += montant
+      else dataMois[m].courantAttente += montant
     } else if (y === anneePrecedente) {
-      dataMois[m].caPrecedentFacture += (f.total_ttc || 0)
+      if (f.statut === 'Payée') dataMois[m].precedentPaye += montant
+      else dataMois[m].precedentAttente += montant
     }
   })
 
-  // Répartition des interventions non facturées (basées sur leur date)
   interventions.value.forEach(i => {
-    if (!i.date || i.facture_id) return // On ne prend que le non facturé
+    if (!i.date || i.facture_id) return
     const d = new Date(i.date)
     const y = d.getFullYear()
     const m = d.getMonth()
-    const montantHtEquiv = (i.prix_final_ht || 0) * (i.quantite || 1)
+    const montant = (i.prix_final_ht || 0) * (i.quantite || 1)
 
     if (y === anneeCourante) {
-      dataMois[m].caCourantNonFacture += montantHtEquiv
+      dataMois[m].courantNonFacture += montant
     } else if (y === anneePrecedente) {
-      dataMois[m].caPrecedentNonFacture += montantHtEquiv
+      dataMois[m].precedentNonFacture += montant
     }
   })
 
-  // Calcul du max pour la mise à l'échelle des barres empilées
   const maxTotal = Math.max(...dataMois.map(d => Math.max(
-    d.caCourantFacture + d.caCourantNonFacture,
-    d.caPrecedentFacture + d.caPrecedentNonFacture
+    d.courantPaye + d.courantAttente + d.courantNonFacture,
+    d.precedentPaye + d.precedentAttente + d.precedentNonFacture
   )), 100)
 
   return dataMois.map(d => {
-    const totalCourant = d.caCourantFacture + d.caCourantNonFacture
-    const totalPrecedent = d.caPrecedentFacture + d.caPrecedentNonFacture
+    const totalCourant = d.courantPaye + d.courantAttente + d.courantNonFacture
+    const totalPrecedent = d.precedentPaye + d.precedentAttente + d.precedentNonFacture
 
     return {
       ...d,
       totalCourant,
       totalPrecedent,
-      pctCourantFacture: Math.round((d.caCourantFacture / maxTotal) * 100),
-      pctCourantNonFacture: Math.round((d.caCourantNonFacture / maxTotal) * 100),
-      pctPrecedentFacture: Math.round((d.caPrecedentFacture / maxTotal) * 100),
-      pctPrecedentNonFacture: Math.round((d.caPrecedentNonFacture / maxTotal) * 100)
+      // Hauteurs en % pour la colonne courante
+      hCourantPaye: maxTotal ? (d.courantPaye / maxTotal) * 100 : 0,
+      hCourantAttente: maxTotal ? (d.courantAttente / maxTotal) * 100 : 0,
+      hCourantNonFacture: maxTotal ? (d.courantNonFacture / maxTotal) * 100 : 0,
+      // Hauteurs en % pour la colonne N-1
+      hPrecedentPaye: maxTotal ? (d.precedentPaye / maxTotal) * 100 : 0,
+      hPrecedentAttente: maxTotal ? (d.precedentAttente / maxTotal) * 100 : 0,
+      hPrecedentNonFacture: maxTotal ? (d.precedentNonFacture / maxTotal) * 100 : 0,
     }
   })
 })
@@ -289,57 +267,32 @@ onMounted(() => {
 
     <!-- Grille des cartes de pilotage -->
     <div class="grid grid-cols-2 gap-3">
-      <!-- 1. CA Facturé -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CA Facturé</span>
-        <div class="text-base font-extrabold text-slate-900 mt-2">
-          {{ loading ? '...' : totalCa.toFixed(2) }} €
-        </div>
+        <div class="text-base font-extrabold text-slate-900 mt-2">{{ loading ? '...' : totalCa.toFixed(2) }} €</div>
       </div>
-
-      <!-- 2. CA Global (Facturé + Non facturé) -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">CA Global (Estimé)</span>
-        <div class="text-base font-extrabold text-indigo-600 mt-2">
-          {{ loading ? '...' : totalCaGlobal.toFixed(2) }} €
-        </div>
+        <div class="text-base font-extrabold text-indigo-600 mt-2">{{ loading ? '...' : totalCaGlobal.toFixed(2) }} €</div>
       </div>
-
-      <!-- 3. Encaissé -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Encaissé</span>
-        <div class="text-base font-extrabold text-emerald-600 mt-2">
-          {{ loading ? '...' : totalEncaisse.toFixed(2) }} €
-        </div>
+        <div class="text-base font-extrabold text-emerald-600 mt-2">{{ loading ? '...' : totalEncaisse.toFixed(2) }} €</div>
       </div>
-
-      <!-- 4. En attente -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">En attente Paiement</span>
-        <div class="text-base font-extrabold text-amber-600 mt-2">
-          {{ loading ? '...' : totalEnAttente.toFixed(2) }} €
-        </div>
+        <div class="text-base font-extrabold text-amber-600 mt-2">{{ loading ? '...' : totalEnAttente.toFixed(2) }} €</div>
       </div>
-
-      <!-- 5. Paiements en retard -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <div class="flex justify-between items-center">
-          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">En retard Paiement</span>
-          <span v-if="!loading && totalRetardCount > 0" class="text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded-full border border-red-100">
-            {{ totalRetardCount }}
-          </span>
+          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">En retard</span>
+          <span v-if="!loading && totalRetardCount > 0" class="text-[10px] bg-red-50 text-red-600 font-bold px-1.5 py-0.5 rounded-full border border-red-100">{{ totalRetardCount }}</span>
         </div>
-        <div class="text-base font-extrabold text-red-600 mt-2">
-          {{ loading ? '...' : totalRetardMontant.toFixed(2) }} €
-        </div>
+        <div class="text-base font-extrabold text-red-600 mt-2">{{ loading ? '...' : totalRetardMontant.toFixed(2) }} €</div>
       </div>
-
-      <!-- 6. Reste à Facturer -->
       <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Reste à Facturer</span>
-        <div class="text-base font-extrabold text-indigo-600 mt-2">
-          {{ loading ? '...' : totalResteAFacturer.toFixed(2) }} € HT
-        </div>
+        <div class="text-base font-extrabold text-indigo-600 mt-2">{{ loading ? '...' : totalResteAFacturer.toFixed(2) }} € HT</div>
       </div>
     </div>
 
@@ -348,7 +301,6 @@ onMounted(() => {
       <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
         <span class="material-icons text-blue-500 text-base">payments</span> Modes de Règlement
       </h2>
-      
       <div v-if="loading" class="text-xs text-slate-400 text-center py-2">Chargement...</div>
       <div v-else-if="modesReglementStats.length === 0" class="text-xs text-slate-400 text-center py-2">Aucun règlement enregistré sur cette période.</div>
       <div v-else class="space-y-2">
@@ -364,53 +316,65 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ANALYTICS : Comparatif CA Année en cours vs N-1 avec non facturé -->
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+    <!-- ANALYTICS : Graphique en colonnes verticales comparatives -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
       <div class="flex justify-between items-center">
         <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-          <span class="material-icons text-indigo-500 text-base">bar_chart</span> Comparatif CA Global ({{ selectedYear }} vs {{ parseInt(selectedYear) - 1 }})
+          <span class="material-icons text-indigo-500 text-base">bar_chart</span> Comparatif CA Mensuel ({{ selectedYear }} vs {{ parseInt(selectedYear) - 1 }})
         </h2>
       </div>
 
-      <!-- Légende des couleurs -->
-      <div class="grid grid-cols-2 gap-2 text-[10px] text-slate-600 pt-1">
+      <!-- Légende détaillée -->
+      <div class="grid grid-cols-2 gap-2 text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
         <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-blue-600 rounded-sm inline-block"></span> {{ selectedYear }} (Facturé)
+          <span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm inline-block"></span> Payé (Facturé)
         </div>
         <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-orange-500 rounded-sm inline-block"></span> {{ selectedYear }} (À facturer)
+          <span class="w-2.5 h-2.5 bg-blue-500 rounded-sm inline-block"></span> En attente (Facturé)
         </div>
         <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-slate-400 rounded-sm inline-block"></span> {{ parseInt(selectedYear) - 1 }} (Facturé)
+          <span class="w-2.5 h-2.5 bg-orange-500 rounded-sm inline-block"></span> Non facturé ({{ selectedYear }})
         </div>
         <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm inline-block"></span> {{ parseInt(selectedYear) - 1 }} (À facturer)
+          <span class="w-2.5 h-2.5 bg-slate-400 rounded-sm inline-block"></span> Non facturé ({{ parseInt(selectedYear) - 1 }})
         </div>
       </div>
 
-      <!-- Graphique en barres empilées -->
-      <div class="space-y-3 pt-2">
-        <div v-for="m in comparatifAnnuels" :key="m.mois" class="space-y-1">
-          <div class="flex justify-between text-[11px] font-medium text-slate-600">
-            <span>{{ m.mois }}</span>
-            <div class="space-x-2">
-              <span class="text-blue-600 font-bold">{{ m.totalCourant.toFixed(0) }} €</span>
-              <span class="text-slate-400">{{ m.totalPrecedent.toFixed(0) }} €</span>
-            </div>
-          </div>
-          
-          <div class="flex flex-col gap-1">
-            <!-- Barre Année en cours (Bleu + Orange) -->
-            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
-              <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: m.pctCourantFacture + '%' }" :title="'Facturé: ' + m.caCourantFacture + '€'"></div>
-              <div class="bg-orange-500 h-full transition-all duration-500" :style="{ width: m.pctCourantNonFacture + '%' }" :title="'Non facturé: ' + m.caCourantNonFacture + '€'"></div>
+      <!-- Graphique en colonnes verticales défilant horizontalement -->
+      <div class="overflow-x-auto pb-2 pt-4">
+        <div class="flex items-end justify-between gap-3 min-w-[650px] h-60 px-2 border-b border-slate-200 pb-2">
+          <div v-for="m in graphiqueColonnesMois" :key="m.mois" class="flex-1 flex flex-col items-center h-full justify-end group">
+            
+            <!-- Conteneur des deux colonnes (Année courante vs Année N-1) -->
+            <div class="flex items-end justify-center gap-1 w-full h-full">
+              
+              <!-- Colonne Année en cours -->
+              <div class="w-4 flex flex-col justify-end bg-slate-100 rounded-t overflow-hidden h-full relative" :title="selectedYear + ' - Total: ' + m.totalCourant.toFixed(0) + '€'">
+                <div class="text-[9px] font-bold text-center text-slate-700 absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                  {{ m.totalCourant > 0 ? m.totalCourant.toFixed(0) + '€' : '' }}
+                </div>
+                <!-- 1. Non facturé (Orange) -->
+                <div class="bg-orange-500 transition-all duration-500" :style="{ height: m.hCourantNonFacture + '%' }" title="Non facturé"></div>
+                <!-- 2. En attente (Bleu) -->
+                <div class="bg-blue-500 transition-all duration-500" :style="{ height: m.hCourantAttente + '%' }" title="Facturé en attente"></div>
+                <!-- 3. Payé (Vert) -->
+                <div class="bg-emerald-500 transition-all duration-500" :style="{ height: m.hCourantPaye + '%' }" title="Facturé payé"></div>
+              </div>
+
+              <!-- Colonne Année N-1 -->
+              <div class="w-3 flex flex-col justify-end bg-slate-100 rounded-t overflow-hidden h-full opacity-70" :title="(parseInt(selectedYear)-1) + ' - Total: ' + m.totalPrecedent.toFixed(0) + '€'">
+                <!-- 1. Non facturé N-1 (Gris) -->
+                <div class="bg-slate-400 transition-all duration-500" :style="{ height: m.hPrecedentNonFacture + '%' }"></div>
+                <!-- 2. En attente N-1 (Bleu grisé) -->
+                <div class="bg-blue-300 transition-all duration-500" :style="{ height: m.hPrecedentAttente + '%' }"></div>
+                <!-- 3. Payé N-1 (Vert grisé) -->
+                <div class="bg-emerald-300 transition-all duration-500" :style="{ height: m.hPrecedentPaye + '%' }"></div>
+              </div>
+
             </div>
 
-            <!-- Barre Année N-1 (Gris + Vert) -->
-            <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
-              <div class="bg-blue-600 h-full transition-all duration-500" :style="{ width: m.pctPrecedentFacture + '%' }" :title="'Facturé N-1: ' + m.caPrecedentFacture + '€'"></div>
-              <div class="bg-slate-400 h-full transition-all duration-500" :style="{ width: m.pctPrecedentNonFacture + '%' }" :title="'Non facturé N-1: ' + m.caPrecedentNonFacture + '€'"></div>
-            </div>
+            <!-- Étiquette du mois -->
+            <span class="text-[10px] font-bold text-slate-600 mt-2">{{ m.mois }}</span>
           </div>
         </div>
       </div>
