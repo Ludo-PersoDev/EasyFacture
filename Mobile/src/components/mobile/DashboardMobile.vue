@@ -61,7 +61,7 @@ const fetchDashboardData = async () => {
 
     userName.value = user.user_metadata?.prenom || user.user_metadata?.full_name || 'Utilisateur'
 
-    // 1. Récupération des factures (avec mode de règlement et total_ht / total_ttc)
+    // 1. Récupération des factures
     const { data: factData, error: factError } = await supabase
       .from('factures')
       .select('total_ttc, total_ht, statut, date_creation, date_echeance, mode_reglement')
@@ -70,7 +70,7 @@ const fetchDashboardData = async () => {
     if (factError) throw factError
     factures.value = factData || []
 
-    // 2. Récupération des interventions
+    // 2. Récupération des interventions (avec prix_final_ht, quantite, date et facture_id)
     const { data: interData, error: interError } = await supabase
       .from('interventions')
       .select('date, prix_final_ht, quantite, facture_id')
@@ -143,7 +143,6 @@ const totalResteAFacturer = computed(() => {
     .reduce((acc, i) => acc + ((i.prix_final_ht || 0) * (i.quantite || 1)), 0)
 })
 
-// CA Global (Facturé + Reste à facturer en HT/TTC équivalent)
 const totalCaGlobal = computed(() => totalCa.value + totalResteAFacturer.value)
 
 // 1. Détail des modes de règlement
@@ -167,18 +166,25 @@ const modesReglementStats = computed(() => {
   })).sort((a, b) => b.montant - a.montant)
 })
 
-// 2. Comparatif Année en cours vs Année N-1 (Mois par mois)
+// 2. Comparatif Année en cours vs Année N-1 (Facturé + Non facturé par mois)
 const comparatifAnnuels = computed(() => {
   const anneeCourante = parseInt(selectedYear.value)
   const anneePrecedente = anneeCourante - 1
 
   const moisNoms = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
   
-  // Initialisation des 12 mois
   const dataMois = moisNoms.map((nom, index) => {
-    return { mois: nom, indexMois: index, caCourant: 0, caPrecedent: 0 }
+    return { 
+      mois: nom, 
+      indexMois: index, 
+      caCourantFacture: 0, 
+      caCourantNonFacture: 0, 
+      caPrecedentFacture: 0, 
+      caPrecedentNonFacture: 0 
+    }
   })
 
+  // Répartition des factures
   factures.value.forEach(f => {
     if (!f.date_creation) return
     const d = new Date(f.date_creation)
@@ -186,20 +192,47 @@ const comparatifAnnuels = computed(() => {
     const m = d.getMonth()
 
     if (y === anneeCourante) {
-      dataMois[m].caCourant += (f.total_ttc || 0)
+      dataMois[m].caCourantFacture += (f.total_ttc || 0)
     } else if (y === anneePrecedente) {
-      dataMois[m].caPrecedent += (f.total_ttc || 0)
+      dataMois[m].caPrecedentFacture += (f.total_ttc || 0)
     }
   })
 
-  // Trouver le max pour l'échelle des barres graphiques
-  const maxCa = Math.max(...dataMois.map(d => Math.max(d.caCourant, d.caPrecedent)), 100)
+  // Répartition des interventions non facturées (basées sur leur date)
+  interventions.value.forEach(i => {
+    if (!i.date || i.facture_id) return // On ne prend que le non facturé
+    const d = new Date(i.date)
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const montantHtEquiv = (i.prix_final_ht || 0) * (i.quantite || 1)
 
-  return dataMois.map(d => ({
-    ...d,
-    pctCourant: Math.round((d.caCourant / maxCa) * 100),
-    pctPrecedent: Math.round((d.caPrecedent / maxCa) * 100)
-  }))
+    if (y === anneeCourante) {
+      dataMois[m].caCourantNonFacture += montantHtEquiv
+    } else if (y === anneePrecedente) {
+      dataMois[m].caPrecedentNonFacture += montantHtEquiv
+    }
+  })
+
+  // Calcul du max pour la mise à l'échelle des barres empilées
+  const maxTotal = Math.max(...dataMois.map(d => Math.max(
+    d.caCourantFacture + d.caCourantNonFacture,
+    d.caPrecedentFacture + d.caPrecedentNonFacture
+  )), 100)
+
+  return dataMois.map(d => {
+    const totalCourant = d.caCourantFacture + d.caCourantNonFacture
+    const totalPrecedent = d.caPrecedentFacture + d.caPrecedentNonFacture
+
+    return {
+      ...d,
+      totalCourant,
+      totalPrecedent,
+      pctCourantFacture: Math.round((d.caCourantFacture / maxTotal) * 100),
+      pctCourantNonFacture: Math.round((d.caCourantNonFacture / maxTotal) * 100),
+      pctPrecedentFacture: Math.round((d.caPrecedentFacture / maxTotal) * 100),
+      pctPrecedentNonFacture: Math.round((d.caPrecedentNonFacture / maxTotal) * 100)
+    }
+  })
 })
 
 onMounted(() => {
@@ -331,41 +364,52 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ANALYTICS : Comparatif CA Année en cours vs N-1 -->
+    <!-- ANALYTICS : Comparatif CA Année en cours vs N-1 avec non facturé -->
     <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
       <div class="flex justify-between items-center">
         <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-          <span class="material-icons text-indigo-500 text-base">bar_chart</span> Comparatif CA ({{ selectedYear }} vs {{ parseInt(selectedYear) - 1 }})
+          <span class="material-icons text-indigo-500 text-base">bar_chart</span> Comparatif CA Global ({{ selectedYear }} vs {{ parseInt(selectedYear) - 1 }})
         </h2>
       </div>
 
-      <div class="flex items-center gap-4 text-[10px] text-slate-500">
-        <div class="flex items-center gap-1">
-          <span class="w-2.5 h-2.5 bg-blue-600 rounded-sm inline-block"><i></i></span> {{ selectedYear }}
+      <!-- Légende des couleurs -->
+      <div class="grid grid-cols-2 gap-2 text-[10px] text-slate-600 pt-1">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 bg-blue-600 rounded-sm inline-block"></span> {{ selectedYear }} (Facturé)
         </div>
-        <div class="flex items-center gap-1">
-          <span class="w-2.5 h-2.5 bg-slate-300 rounded-sm inline-block"></span> {{ parseInt(selectedYear) - 1 }}
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 bg-orange-500 rounded-sm inline-block"></span> {{ selectedYear }} (À facturer)
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 bg-slate-400 rounded-sm inline-block"></span> {{ parseInt(selectedYear) - 1 }} (Facturé)
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm inline-block"></span> {{ parseInt(selectedYear) - 1 }} (À facturer)
         </div>
       </div>
 
-      <!-- Graphique en barres simplifié et responsive -->
-      <div class="space-y-2 pt-2">
+      <!-- Graphique en barres empilées -->
+      <div class="space-y-3 pt-2">
         <div v-for="m in comparatifAnnuels" :key="m.mois" class="space-y-1">
           <div class="flex justify-between text-[11px] font-medium text-slate-600">
             <span>{{ m.mois }}</span>
             <div class="space-x-2">
-              <span class="text-blue-600 font-bold">{{ m.caCourant.toFixed(0) }} €</span>
-              <span class="text-slate-400">{{ m.caPrecedent.toFixed(0) }} €</span>
+              <span class="text-blue-600 font-bold">{{ m.totalCourant.toFixed(0) }} €</span>
+              <span class="text-slate-400">{{ m.totalPrecedent.toFixed(0) }} €</span>
             </div>
           </div>
+          
           <div class="flex flex-col gap-1">
-            <!-- Barre Année en cours -->
-            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div class="bg-blue-600 h-full rounded-full transition-all duration-500" :style="{ width: m.pctCourant + '%' }"></div>
+            <!-- Barre Année en cours (Bleu + Orange) -->
+            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
+              <div class="bg-blue-600 h-full transition-all duration-500" :style="{ width: m.pctCourantFacture + '%' }" :title="'Facturé: ' + m.caCourantFacture + '€'"></div>
+              <div class="bg-orange-500 h-full transition-all duration-500" :style="{ width: m.pctCourantNonFacture + '%' }" :title="'À facturer: ' + m.caCourantNonFacture + '€'"></div>
             </div>
-            <!-- Barre Année N-1 -->
-            <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-              <div class="bg-slate-300 h-full rounded-full transition-all duration-500" :style="{ width: m.pctPrecedent + '%' }"></div>
+
+            <!-- Barre Année N-1 (Gris + Vert) -->
+            <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
+              <div class="bg-slate-400 h-full transition-all duration-500" :style="{ width: m.pctPrecedentFacture + '%' }" :title="'Facturé N-1: ' + m.caPrecedentFacture + '€'"></div>
+              <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: m.pctPrecedentNonFacture + '%' }" :title="'À facturer N-1: ' + m.caPrecedentNonFacture + '€'"></div>
             </div>
           </div>
         </div>
