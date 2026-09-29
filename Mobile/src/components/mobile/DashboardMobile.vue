@@ -326,14 +326,14 @@ onMounted(() => {
       <div class="grid grid-cols-2 gap-2 text-[10px] text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
         <div class="space-y-1">
           <div class="font-bold text-slate-700 mb-1">Année {{ selectedYear }} (Vif)</div>
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></span> Payé</div>
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-blue-500 rounded-sm"></span> En attente</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></span> Facturé et Payé</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-blue-500 rounded-sm"></span> Facturé en Attente</div>
           <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-orange-500 rounded-sm"></span> Non facturé</div>
         </div>
         <div class="space-y-1 border-l pl-2 border-slate-200">
           <div class="font-bold text-slate-500 mb-1">Année {{ parseInt(selectedYear) - 1 }} (Grisé)</div>
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-emerald-300 rounded-sm"></span> Payé N-1</div>
-          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-blue-300 rounded-sm"></span> En attente N-1</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-emerald-300 rounded-sm"></span> Facturé et Payé N-1</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-blue-300 rounded-sm"></span> Facturé en Attente N-1</div>
           <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-orange-300 rounded-sm"></span> Non facturé N-1</div>
         </div>
       </div>
