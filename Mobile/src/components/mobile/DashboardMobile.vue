@@ -402,14 +402,14 @@ onMounted(() => {
           <div class="flex flex-col gap-1">
             <!-- Barre Année en cours (Bleu + Orange) -->
             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
-              <div class="bg-blue-600 h-full transition-all duration-500" :style="{ width: m.pctCourantFacture + '%' }" :title="'Facturé: ' + m.caCourantFacture + '€'"></div>
-              <div class="bg-orange-500 h-full transition-all duration-500" :style="{ width: m.pctCourantNonFacture + '%' }" :title="'À facturer: ' + m.caCourantNonFacture + '€'"></div>
+              <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: m.pctCourantFacture + '%' }" :title="'Facturé: ' + m.caCourantFacture + '€'"></div>
+              <div class="bg-orange-500 h-full transition-all duration-500" :style="{ width: m.pctCourantNonFacture + '%' }" :title="'Non facturé: ' + m.caCourantNonFacture + '€'"></div>
             </div>
 
             <!-- Barre Année N-1 (Gris + Vert) -->
             <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
-              <div class="bg-slate-400 h-full transition-all duration-500" :style="{ width: m.pctPrecedentFacture + '%' }" :title="'Facturé N-1: ' + m.caPrecedentFacture + '€'"></div>
-              <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: m.pctPrecedentNonFacture + '%' }" :title="'À facturer N-1: ' + m.caPrecedentNonFacture + '€'"></div>
+              <div class="bg-blue-600 h-full transition-all duration-500" :style="{ width: m.pctPrecedentFacture + '%' }" :title="'Facturé N-1: ' + m.caPrecedentFacture + '€'"></div>
+              <div class="bg-slate-400 h-full transition-all duration-500" :style="{ width: m.pctPrecedentNonFacture + '%' }" :title="'Non facturé N-1: ' + m.caPrecedentNonFacture + '€'"></div>
             </div>
           </div>
         </div>
