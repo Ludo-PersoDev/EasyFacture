@@ -353,15 +353,15 @@ onMounted(() => {
           <div class="flex flex-col gap-1">
             <!-- Barre Année en cours (Vif) -->
             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex" :title="selectedYear + ' - Total: ' + m.totalCourant.toFixed(0) + '€'">
-              <div class="bg-emerald-500 transition-all duration-500" :style="{ width: m.pctCourantPaye + '%' }" title="Payé"></div>
-              <div class="bg-blue-500 transition-all duration-500" :style="{ width: m.pctCourantAttente + '%' }" title="En attente"></div>
+              <div class="bg-emerald-500 transition-all duration-500" :style="{ width: m.pctCourantPaye + '%' }" title="Facturé et Payé"></div>
+              <div class="bg-blue-500 transition-all duration-500" :style="{ width: m.pctCourantAttente + '%' }" title="Facturé en Attente"></div>
               <div class="bg-orange-500 transition-all duration-500" :style="{ width: m.pctCourantNonFacture + '%' }" title="Non facturé"></div>
             </div>
 
             <!-- Barre Année N-1 (Grisé / Pastel) -->
             <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex" :title="(parseInt(selectedYear)-1) + ' - Total: ' + m.totalPrecedent.toFixed(0) + '€'">
-              <div class="bg-emerald-300 transition-all duration-500" :style="{ width: m.pctPrecedentPaye + '%' }" title="Payé N-1"></div>
-              <div class="bg-blue-300 transition-all duration-500" :style="{ width: m.pctPrecedentAttente + '%' }" title="En attente N-1"></div>
+              <div class="bg-emerald-300 transition-all duration-500" :style="{ width: m.pctPrecedentPaye + '%' }" title="Facturé et Payé N-1"></div>
+              <div class="bg-blue-300 transition-all duration-500" :style="{ width: m.pctPrecedentAttente + '%' }" title="Facturé en Attente N-1"></div>
               <div class="bg-orange-300 transition-all duration-500" :style="{ width: m.pctPrecedentNonFacture + '%' }" title="Non facturé N-1"></div>
             </div>
           </div>
