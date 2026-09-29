@@ -142,7 +142,7 @@ const modesReglementStats = computed(() => {
   })).sort((a, b) => b.montant - a.montant)
 })
 
-// 2. Graphique en colonnes verticales par mois (Payé, En attente, Non facturé)
+// 2. Graphique comparatif mensuel (Barres longitudinales empilées)
 const graphiqueColonnesMois = computed(() => {
   const anneeCourante = parseInt(selectedYear.value)
   const anneePrecedente = anneeCourante - 1
@@ -201,11 +201,9 @@ const graphiqueColonnesMois = computed(() => {
       ...d,
       totalCourant,
       totalPrecedent,
-      // Hauteurs en % pour la colonne courante
       hCourantPaye: maxTotal ? (d.courantPaye / maxTotal) * 100 : 0,
       hCourantAttente: maxTotal ? (d.courantAttente / maxTotal) * 100 : 0,
       hCourantNonFacture: maxTotal ? (d.courantNonFacture / maxTotal) * 100 : 0,
-      // Hauteurs en % pour la colonne N-1
       hPrecedentPaye: maxTotal ? (d.precedentPaye / maxTotal) * 100 : 0,
       hPrecedentAttente: maxTotal ? (d.precedentAttente / maxTotal) * 100 : 0,
       hPrecedentNonFacture: maxTotal ? (d.precedentNonFacture / maxTotal) * 100 : 0,
@@ -316,7 +314,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ANALYTICS : Graphique en colonnes verticales comparatives -->
+    <!-- ANALYTICS : Graphique comparatif mensuel (Colonnes longitudinales empilées) -->
     <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
       <div class="flex justify-between items-center">
         <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -325,59 +323,59 @@ onMounted(() => {
       </div>
 
       <!-- Légende détaillée -->
-      <div class="grid grid-cols-2 gap-2 text-[10px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
-        <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm inline-block"></span> Payé (Facturé)
+      <div class="grid grid-cols-2 gap-2 text-[10px] text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+        <div class="space-y-1">
+          <div class="font-bold text-slate-700 mb-1">Année {{ selectedYear }} (Vif)</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></span> Payé</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-blue-500 rounded-sm"></span> En attente</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-orange-500 rounded-sm"></span> Non facturé</div>
         </div>
-        <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-blue-500 rounded-sm inline-block"></span> En attente (Facturé)
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-orange-500 rounded-sm inline-block"></span> Non facturé ({{ selectedYear }})
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span class="w-2.5 h-2.5 bg-slate-400 rounded-sm inline-block"></span> Non facturé ({{ parseInt(selectedYear) - 1 }})
+        <div class="space-y-1 border-l pl-2 border-slate-200">
+          <div class="font-bold text-slate-500 mb-1">Année {{ parseInt(selectedYear) - 1 }} (Grisé)</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-emerald-300 rounded-sm"></span> Payé N-1</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-blue-300 rounded-sm"></span> En attente N-1</div>
+          <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-orange-300 rounded-sm"></span> Non facturé N-1</div>
         </div>
       </div>
 
-      <!-- Graphique en colonnes verticales défilant horizontalement -->
-      <div class="overflow-x-auto pb-2 pt-4">
-        <div class="flex items-end justify-between gap-3 min-w-[650px] h-60 px-2 border-b border-slate-200 pb-2">
-          <div v-for="m in graphiqueColonnesMois" :key="m.mois" class="flex-1 flex flex-col items-center h-full justify-end group">
+      <!-- Graphique en colonnes verticales (longitudinales) par mois -->
+      <div class="space-y-4 pt-2">
+        <div v-for="m in graphiqueColonnesMois" :key="m.mois" class="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100 space-y-2">
+          
+          <!-- En-tête de la ligne mois avec ses totaux -->
+          <div class="flex justify-between items-center text-xs">
+            <span class="font-bold text-slate-800 w-8">{{ m.mois }}</span>
+            <div class="flex gap-4 text-[11px]">
+              <span class="text-blue-600 font-bold">{{ selectedYear }}: <strong>{{ m.totalCourant.toFixed(0) }} €</strong></span>
+              <span class="text-slate-400 font-medium">{{ parseInt(selectedYear)-1 }}: <strong>{{ m.totalPrecedent.toFixed(0) }} €</strong></span>
+            </div>
+          </div>
+
+          <!-- Barres côte à côte (Verticales / Longitudinales) -->
+          <div class="flex items-end gap-2 h-14 px-1 pt-2 border-b border-slate-200 pb-1">
             
-            <!-- Conteneur des deux colonnes (Année courante vs Année N-1) -->
-            <div class="flex items-end justify-center gap-1 w-full h-full">
-              
-              <!-- Colonne Année en cours -->
-              <div class="w-4 flex flex-col justify-end bg-slate-100 rounded-t overflow-hidden h-full relative" :title="selectedYear + ' - Total: ' + m.totalCourant.toFixed(0) + '€'">
-                <div class="text-[9px] font-bold text-center text-slate-700 absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                  {{ m.totalCourant > 0 ? m.totalCourant.toFixed(0) + '€' : '' }}
-                </div>
-                <!-- 1. Non facturé (Orange) -->
+            <!-- Colonne Année en cours -->
+            <div class="flex-1 flex flex-col justify-end bg-slate-200/60 h-full rounded-t overflow-hidden relative" :title="selectedYear + ' : ' + m.totalCourant.toFixed(0) + '€'">
+              <div class="w-full flex flex-col justify-end h-full">
                 <div class="bg-orange-500 transition-all duration-500" :style="{ height: m.hCourantNonFacture + '%' }" title="Non facturé"></div>
-                <!-- 2. En attente (Bleu) -->
-                <div class="bg-blue-500 transition-all duration-500" :style="{ height: m.hCourantAttente + '%' }" title="Facturé en attente"></div>
-                <!-- 3. Payé (Vert) -->
-                <div class="bg-emerald-500 transition-all duration-500" :style="{ height: m.hCourantPaye + '%' }" title="Facturé payé"></div>
+                <div class="bg-blue-500 transition-all duration-500" :style="{ height: m.hCourantAttente + '%' }" title="En attente"></div>
+                <div class="bg-emerald-500 transition-all duration-500" :style="{ height: m.hCourantPaye + '%' }" title="Payé"></div>
               </div>
-
-              <!-- Colonne Année N-1 -->
-              <div class="w-3 flex flex-col justify-end bg-slate-100 rounded-t overflow-hidden h-full opacity-70" :title="(parseInt(selectedYear)-1) + ' - Total: ' + m.totalPrecedent.toFixed(0) + '€'">
-                <!-- 1. Non facturé N-1 (Gris) -->
-                <div class="bg-slate-400 transition-all duration-500" :style="{ height: m.hPrecedentNonFacture + '%' }"></div>
-                <!-- 2. En attente N-1 (Bleu grisé) -->
-                <div class="bg-blue-300 transition-all duration-500" :style="{ height: m.hPrecedentAttente + '%' }"></div>
-                <!-- 3. Payé N-1 (Vert grisé) -->
-                <div class="bg-emerald-300 transition-all duration-500" :style="{ height: m.hPrecedentPaye + '%' }"></div>
-              </div>
-
             </div>
 
-            <!-- Étiquette du mois -->
-            <span class="text-[10px] font-bold text-slate-600 mt-2">{{ m.mois }}</span>
+            <!-- Colonne Année N-1 -->
+            <div class="flex-1 flex flex-col justify-end bg-slate-200/60 h-full rounded-t overflow-hidden relative" :title="(parseInt(selectedYear)-1) + ' : ' + m.totalPrecedent.toFixed(0) + '€'">
+              <div class="w-full flex flex-col justify-end h-full">
+                <div class="bg-orange-300 transition-all duration-500" :style="{ height: m.hPrecedentNonFacture + '%' }" title="Non facturé N-1"></div>
+                <div class="bg-blue-300 transition-all duration-500" :style="{ height: m.hPrecedentAttente + '%' }" title="En attente N-1"></div>
+                <div class="bg-emerald-300 transition-all duration-500" :style="{ height: m.hPrecedentPaye + '%' }" title="Payé N-1"></div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
