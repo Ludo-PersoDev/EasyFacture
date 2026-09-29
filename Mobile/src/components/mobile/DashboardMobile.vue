@@ -142,8 +142,8 @@ const modesReglementStats = computed(() => {
   })).sort((a, b) => b.montant - a.montant)
 })
 
-// 2. Graphique comparatif mensuel (Barres longitudinales empilées)
-const graphiqueColonnesMois = computed(() => {
+// 2. Graphique comparatif mensuel (Barres horizontales fines)
+const comparatifAnnuels = computed(() => {
   const anneeCourante = parseInt(selectedYear.value)
   const anneePrecedente = anneeCourante - 1
   const moisNoms = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
@@ -201,12 +201,12 @@ const graphiqueColonnesMois = computed(() => {
       ...d,
       totalCourant,
       totalPrecedent,
-      hCourantPaye: maxTotal ? (d.courantPaye / maxTotal) * 100 : 0,
-      hCourantAttente: maxTotal ? (d.courantAttente / maxTotal) * 100 : 0,
-      hCourantNonFacture: maxTotal ? (d.courantNonFacture / maxTotal) * 100 : 0,
-      hPrecedentPaye: maxTotal ? (d.precedentPaye / maxTotal) * 100 : 0,
-      hPrecedentAttente: maxTotal ? (d.precedentAttente / maxTotal) * 100 : 0,
-      hPrecedentNonFacture: maxTotal ? (d.precedentNonFacture / maxTotal) * 100 : 0,
+      pctCourantPaye: maxTotal ? (d.courantPaye / maxTotal) * 100 : 0,
+      pctCourantAttente: maxTotal ? (d.courantAttente / maxTotal) * 100 : 0,
+      pctCourantNonFacture: maxTotal ? (d.courantNonFacture / maxTotal) * 100 : 0,
+      pctPrecedentPaye: maxTotal ? (d.precedentPaye / maxTotal) * 100 : 0,
+      pctPrecedentAttente: maxTotal ? (d.precedentAttente / maxTotal) * 100 : 0,
+      pctPrecedentNonFacture: maxTotal ? (d.precedentNonFacture / maxTotal) * 100 : 0,
     }
   })
 })
@@ -314,8 +314,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- ANALYTICS : Graphique comparatif mensuel (Colonnes longitudinales empilées) -->
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+    <!-- ANALYTICS : Graphique comparatif mensuel (Lignes fines horizontales empilées) -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
       <div class="flex justify-between items-center">
         <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
           <span class="material-icons text-indigo-500 text-base">bar_chart</span> Comparatif CA Mensuel ({{ selectedYear }} vs {{ parseInt(selectedYear) - 1 }})
@@ -338,40 +338,32 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Graphique en colonnes verticales (longitudinales) par mois -->
-      <div class="space-y-4 pt-2">
-        <div v-for="m in graphiqueColonnesMois" :key="m.mois" class="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100 space-y-2">
-          
-          <!-- En-tête de la ligne mois avec ses totaux -->
-          <div class="flex justify-between items-center text-xs">
-            <span class="font-bold text-slate-800 w-8">{{ m.mois }}</span>
-            <div class="flex gap-4 text-[11px]">
-              <span class="text-blue-600 font-bold">{{ selectedYear }}: <strong>{{ m.totalCourant.toFixed(0) }} €</strong></span>
-              <span class="text-slate-400 font-medium">{{ parseInt(selectedYear)-1 }}: <strong>{{ m.totalPrecedent.toFixed(0) }} €</strong></span>
+      <!-- Barres horizontales fines par mois -->
+      <div class="space-y-2 pt-1">
+        <div v-for="m in comparatifAnnuels" :key="m.mois" class="space-y-1">
+          <!-- Nom du mois et totaux discrets -->
+          <div class="flex justify-between text-[11px] font-medium text-slate-600">
+            <span>{{ m.mois }}</span>
+            <div class="space-x-2">
+              <span class="text-blue-600 font-bold">{{ m.totalCourant.toFixed(0) }} €</span>
+              <span class="text-slate-400">{{ m.totalPrecedent.toFixed(0) }} €</span>
             </div>
           </div>
-
-          <!-- Barres côte à côte (Verticales / Longitudinales) -->
-          <div class="flex items-end gap-2 h-14 px-1 pt-2 border-b border-slate-200 pb-1">
-            
-            <!-- Colonne Année en cours -->
-            <div class="flex-1 flex flex-col justify-end bg-slate-200/60 h-full rounded-t overflow-hidden relative" :title="selectedYear + ' : ' + m.totalCourant.toFixed(0) + '€'">
-              <div class="w-full flex flex-col justify-end h-full">
-                <div class="bg-orange-500 transition-all duration-500" :style="{ height: m.hCourantNonFacture + '%' }" title="Non facturé"></div>
-                <div class="bg-blue-500 transition-all duration-500" :style="{ height: m.hCourantAttente + '%' }" title="En attente"></div>
-                <div class="bg-emerald-500 transition-all duration-500" :style="{ height: m.hCourantPaye + '%' }" title="Payé"></div>
-              </div>
+          
+          <div class="flex flex-col gap-1">
+            <!-- Barre Année en cours (Vif) -->
+            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex" :title="selectedYear + ' - Total: ' + m.totalCourant.toFixed(0) + '€'">
+              <div class="bg-emerald-500 transition-all duration-500" :style="{ width: m.pctCourantPaye + '%' }" title="Payé"></div>
+              <div class="bg-blue-500 transition-all duration-500" :style="{ width: m.pctCourantAttente + '%' }" title="En attente"></div>
+              <div class="bg-orange-500 transition-all duration-500" :style="{ width: m.pctCourantNonFacture + '%' }" title="Non facturé"></div>
             </div>
 
-            <!-- Colonne Année N-1 -->
-            <div class="flex-1 flex flex-col justify-end bg-slate-200/60 h-full rounded-t overflow-hidden relative" :title="(parseInt(selectedYear)-1) + ' : ' + m.totalPrecedent.toFixed(0) + '€'">
-              <div class="w-full flex flex-col justify-end h-full">
-                <div class="bg-orange-300 transition-all duration-500" :style="{ height: m.hPrecedentNonFacture + '%' }" title="Non facturé N-1"></div>
-                <div class="bg-blue-300 transition-all duration-500" :style="{ height: m.hPrecedentAttente + '%' }" title="En attente N-1"></div>
-                <div class="bg-emerald-300 transition-all duration-500" :style="{ height: m.hPrecedentPaye + '%' }" title="Payé N-1"></div>
-              </div>
+            <!-- Barre Année N-1 (Grisé / Pastel) -->
+            <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex" :title="(parseInt(selectedYear)-1) + ' - Total: ' + m.totalPrecedent.toFixed(0) + '€'">
+              <div class="bg-emerald-300 transition-all duration-500" :style="{ width: m.pctPrecedentPaye + '%' }" title="Payé N-1"></div>
+              <div class="bg-blue-300 transition-all duration-500" :style="{ width: m.pctPrecedentAttente + '%' }" title="En attente N-1"></div>
+              <div class="bg-orange-300 transition-all duration-500" :style="{ width: m.pctPrecedentNonFacture + '%' }" title="Non facturé N-1"></div>
             </div>
-
           </div>
         </div>
       </div>
