@@ -9,6 +9,9 @@ const sitesSecondaires = ref([])
 const loading = ref(true)
 const showModal = ref(false)
 
+// Gestion du mode édition
+const editingInterventionId = ref(null)
+
 // Champs du formulaire modale
 const selectedClientId = ref('')
 const siteId = ref('')
@@ -41,7 +44,7 @@ const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // 1. Récupération des interventions avec jointure sur les factures pour le statut dynamique
+    // 1. Récupération des interventions avec jointure sur les factures pour le statut dynamique[cite: 3]
     const { data: interData, error: interError } = await supabase
       .from('interventions')
       .select('id, client_id, prestation_id, etablissement_id, date, heure_debut, heure_fin, quantite, prix_final_ht, commentaire, facture_id, clients(nom_societe), prestations(designation), etablissements(nom_site), factures(statut)')
@@ -49,7 +52,7 @@ const fetchData = async () => {
 
     if (interError) throw interError
 
-    // 2. Récupération des clients
+    // 2. Récupération des clients[cite: 3]
     const { data: clientsData } = await supabase.from('clients').select('*')
     clients.value = clientsData || []
 
@@ -73,7 +76,7 @@ const fetchData = async () => {
       const factureRel = item.factures
       const statutFacture = factureRel ? (factureRel.statut || factureRel[0]?.statut) : null
 
-      // Logique de calcul du statut identique à la version Desktop
+      // Logique de calcul du statut identique à la version Desktop[cite: 3]
       let statutCalcule = 'Planifiée'
       if (item.facture_id) {
         statutCalcule = statutFacture === 'Payée' ? 'Payée' : 'Facturée'
@@ -97,18 +100,20 @@ const fetchData = async () => {
   }
 }
 
-// Chargement des établissements et des prestations (avec tarifs spécifiques) du client
-const handleClientChange = async () => {
+// Chargement des établissements et des prestations (avec tarifs spécifiques) du client[cite: 3]
+const handleClientChange = async (keepSiteAndPresta = false) => {
+  if (!keepSiteAndPresta) {
+    siteId.value = ''
+    selectedCatalogueId.value = ''
+    tarif.value = ''
+  }
   sitesSecondaires.value = []
-  siteId.value = ''
   cataloguePrestations.value = []
-  selectedCatalogueId.value = ''
-  tarif.value = ''
 
   if (!selectedClientId.value) return
 
   try {
-    // 1. Récupération des établissements (etablissements)
+    // 1. Récupération des établissements (etablissements)[cite: 3]
     const { data: etabs } = await supabase
       .from('etablissements')
       .select('*')
@@ -116,7 +121,7 @@ const handleClientChange = async () => {
     
     if (etabs) sitesSecondaires.value = etabs
 
-    // 2. Récupération des tarifs spécifiques ou du catalogue général (prestations)
+    // 2. Récupération des tarifs spécifiques ou du catalogue général (prestations)[cite: 3]
     const { data: tarifsSpec } = await supabase
       .from('client_tarifs')
       .select('prestation_id, prix_specifique_ht, prestations(id, designation, prix_ht)')
@@ -146,7 +151,7 @@ const handleClientChange = async () => {
     }
 
     cataloguePrestations.value = options
-    if (options.length > 0) {
+    if (!keepSiteAndPresta && options.length > 0) {
       selectedCatalogueId.value = options[0].id
       tarif.value = options[0].prix
     }
@@ -155,12 +160,47 @@ const handleClientChange = async () => {
   }
 }
 
-// Mise à jour du tarif lors du changement de prestation
+// Mise à jour du tarif lors du changement de prestation[cite: 3]
 const handleCatalogueChange = () => {
   const selected = cataloguePrestations.value.find(p => p.id == selectedCatalogueId.value)
   if (selected) {
     tarif.value = selected.prix
   }
+}
+
+// Ouvrir la modale en mode Création
+const openCreateModal = () => {
+  editingInterventionId.value = null
+  selectedClientId.value = ''
+  siteId.value = ''
+  selectedCatalogueId.value = ''
+  dateIntervention.value = new Date().toISOString().split('T')[0]
+  heureDebut.value = '14:00'
+  heureFin.value = '16:00'
+  tarif.value = ''
+  description.value = ''
+  sitesSecondaires.value = []
+  cataloguePrestations.value = []
+  showModal.value = true
+}
+
+// Ouvrir la modale en mode Édition avec les données de la ligne cliquée
+const openEditModal = async (item) => {
+  editingInterventionId.value = item.id
+  selectedClientId.value = item.client_id
+  
+  // Charger les listes dépendantes du client tout en préservant le site et la prestation actuels
+  await handleClientChange(true)
+
+  siteId.value = item.etablissement_id || ''
+  selectedCatalogueId.value = item.prestation_id || ''
+  dateIntervention.value = item.date || new Date().toISOString().split('T')[0]
+  heureDebut.value = item.heure_debut || '14:00'
+  heureFin.value = item.heure_fin || '16:00'
+  tarif.value = item.prix_final_ht !== null ? item.prix_final_ht : ''
+  description.value = item.commentaire || ''
+  
+  showModal.value = true
 }
 
 const handleAddPrestation = async () => {
@@ -185,23 +225,26 @@ const handleAddPrestation = async () => {
       heure_fin: heureFin.value,
       quantite: qteCalc,
       prix_final_ht: tarif.value ? parseFloat(tarif.value) : 0,
-      commentaire: description.value,
-      numero_intervention: numeroInterv
+      commentaire: description.value
     }
 
-    const { error } = await supabase.from('interventions').insert([payload])
-    if (error) throw error
+    if (editingInterventionId.value) {
+      // Mode Modification (Update)
+      const { error } = await supabase
+        .from('interventions')
+        .update(payload)
+        .eq('id', editingInterventionId.value)
+      
+      if (error) throw error
+    } else {
+      // Mode Création (Insert)
+      payload.numero_intervention = numeroInterv
+      const { error } = await supabase.from('interventions').insert([payload])
+      if (error) throw error
+    }
 
     // Reset et fermeture
-    selectedClientId.value = ''
-    siteId.value = ''
-    selectedCatalogueId.value = ''
-    tarif.value = ''
-    description.value = ''
-    sitesSecondaires.value = []
-    cataloguePrestations.value = []
     showModal.value = false
-
     await fetchData()
   } catch (err) {
     alert('Erreur lors de l’enregistrement : ' + err.message)
@@ -216,7 +259,7 @@ onMounted(fetchData)
     <!-- En-tête -->
     <div class="flex justify-between items-center">
       <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Prestations de terrain</h2>
-      <button @click="showModal = true" class="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-xl font-medium shadow-sm hover:bg-blue-700 transition">
+      <button @click="openCreateModal" class="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-xl font-medium shadow-sm hover:bg-blue-700 transition">
         + Saisir une prestation
       </button>
     </div>
@@ -227,10 +270,16 @@ onMounted(fetchData)
       Aucune prestation enregistrée.
     </div>
     <div v-else class="space-y-3">
-      <div v-for="item in interventions" :key="item.id" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5">
+      <!-- Clic sur la carte pour modifier -->
+      <div 
+        v-for="item in interventions" 
+        :key="item.id" 
+        @click="openEditModal(item)"
+        class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5 cursor-pointer hover:border-blue-300 hover:shadow transition relative group"
+      >
         <div class="flex justify-between items-start">
           <div>
-            <h3 class="text-xs font-bold text-slate-900">{{ item.titre }}</h3>
+            <h3 class="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition">{{ item.titre }}</h3>
             <p class="text-xs font-medium text-slate-600 mt-0.5">{{ item.client_nom }} <span v-if="item.site_txt !== '-'" class="text-slate-400">({{ item.site_txt }})</span></p>
           </div>
           <div class="text-right">
@@ -246,7 +295,7 @@ onMounted(fetchData)
           </span>
           <span v-else class="text-xs text-slate-400">0.00 € HT</span>
 
-          <!-- Badge du statut dynamique calculé (Facturée en rouge vif) -->
+          <!-- Badge du statut dynamique calculé -->
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" :class="{
             'bg-blue-50 text-blue-700 border border-blue-100': item.statut_calcule === 'Planifiée',
             'bg-amber-50 text-amber-700 border border-amber-100': item.statut_calcule === 'Réalisée',
@@ -259,11 +308,13 @@ onMounted(fetchData)
       </div>
     </div>
 
-    <!-- MODALE -->
+    <!-- MODALE (Création / Modification) -->
     <div v-if="showModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4 shadow-xl my-auto">
         <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-          <h3 class="text-sm font-bold text-slate-900">Nouvelle Prestation Directe</h3>
+          <h3 class="text-sm font-bold text-slate-900">
+            {{ editingInterventionId ? 'Modifier la Prestation' : 'Nouvelle Prestation Directe' }}
+          </h3>
           <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
         </div>
 
@@ -271,7 +322,7 @@ onMounted(fetchData)
           <!-- 1. Client -->
           <div>
             <label class="block text-[11px] font-medium text-slate-500 mb-1">Client</label>
-            <select v-model="selectedClientId" @change="handleClientChange" required class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <select v-model="selectedClientId" @change="handleClientChange(false)" required class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="" disabled>Sélectionner un client</option>
               <option v-for="c in clients" :key="c.id" :value="c.id">
                 {{ c.nom_societe || `${c.prenom || ''} ${c.nom || ''}`.trim() }}
@@ -279,7 +330,7 @@ onMounted(fetchData)
             </select>
           </div>
 
-          <!-- 2. Site / Établissement (Masqué s'il n'y a pas d'établissements pour ce client) -->
+          <!-- 2. Site / Établissement (Masqué s'il n'y a pas d'établissements pour ce client)[cite: 3] -->
           <div v-if="sitesSecondaires.length > 0">
             <label class="block text-[11px] font-medium text-slate-500 mb-1">Site / Établissement</label>
             <select v-model="siteId" class="w-full border border-slate-300 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white">
@@ -335,7 +386,7 @@ onMounted(fetchData)
               Annuler
             </button>
             <button type="submit" class="flex-1 py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-sm hover:bg-emerald-700 transition uppercase tracking-wider flex items-center justify-center gap-1.5">
-              <span>✓</span> Enregistrer
+              <span>✓</span> {{ editingInterventionId ? 'Mettre à jour' : 'Enregistrer' }}
             </button>
           </div>
         </form>
